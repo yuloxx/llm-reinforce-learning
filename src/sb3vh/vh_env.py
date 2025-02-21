@@ -1,9 +1,10 @@
 import gymnasium as gym
 import numpy as np
 from gymnasium.core import ActType, ObsType
-from typing import Any, SupportsFloat
+from typing import Any, SupportsFloat, List
 from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
 from bidict import bidict
+import logging
 from .env_graph_enum import *
 
 # class VirtualHomeEnv(gym.Env):
@@ -38,20 +39,28 @@ object_list = ['microwave', 'coffeetable', 'kitchentable', 'wallshelf', 'kitchen
                'stove']
 object_count = len(object_list)
 
-action_list = ['walk_to_food', 'walk_to_object', 'grab', 'put', 'putin', 'open', 'close']
+action_list = ['none', 'walk_to_food', 'walk_to_object', 'grab', 'put', 'putin', 'open', 'close']
 action_count = len(action_list)
 
 food_index_dict = {food: i for i, food in enumerate(food_list)}
 object_index_dict = {single_object:i for i, single_object in enumerate(object_list)}
 
 
+
 class VirtualHomeGatherFoodEnv(gym.Env):
 
     TARGET_REACHED_REWARD = 50
 
+    TASK_FINISH_REWARD = 200
+
+    BONUS_PER_STEP = 1
+
     PUNISHMENT_REWARD = -10
 
     MAX_GAME_STEP = 256
+
+    OBSERVATION_SPACE_DTYPE = np.uint8
+
 
     def __init__(self, comm: UnityCommunication) -> None:
         """
@@ -61,6 +70,11 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             comm (UnityCommunication): An instance of UnityCommunication for interacting with the Virtual Home environment.
         """
         super(VirtualHomeGatherFoodEnv, self).__init__()
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(logging.DEBUG)
+        if not self.logger.handlers:
+            console_handler = logging.StreamHandler()
+            self.logger.addHandler(console_handler)
 
         self.none = None  # Placeholder for unused variables
         self.comm = comm  # UnityCommunication instance for environment interaction
@@ -82,26 +96,49 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         # - 'food_object_relation': Relationship between objects and food items.
         # - 'food_holding': Number of food hold by the agent (range 0 - 2).
         # - 'food_in_fridge': Number of food put into the fridge
+
+        observation_space_dtype = self.OBSERVATION_SPACE_DTYPE
+        observation_space_max = np.iinfo(observation_space_dtype).max
+        observation_space_min = np.iinfo(observation_space_dtype).min
+
         self.observation_space = gym.spaces.Dict({
-            'food_state': gym.spaces.MultiBinary(food_count),
-            'object_state': gym.spaces.MultiBinary(object_count),
-            'food_character_relation': gym.spaces.Discrete(food_count),
-            'object_character_relation': gym.spaces.MultiDiscrete(object_count),
-            'food_object_relation': gym.spaces.MultiDiscrete([food_count, object_count], dtype=np.int8),
+            'food_state': gym.spaces.Box(
+                low=observation_space_min,
+                high=observation_space_max,
+                shape=(food_count,),
+                dtype=observation_space_dtype,
+            ),
+            'object_state': gym.spaces.Box(
+                low=observation_space_min,
+                high=observation_space_max,
+                shape=(object_count,),
+                dtype=observation_space_dtype,
+            ),
+            'food_character_relation': gym.spaces.Box(
+                low=observation_space_min,
+                high=observation_space_max,
+                shape=(food_count,),
+                dtype=observation_space_dtype,
+            ),
+            'object_character_relation': gym.spaces.Box(
+                low=observation_space_min,
+                high=observation_space_max,
+                shape=(object_count,),
+                dtype=observation_space_dtype,
+            ),
+            'food_object_relation': gym.spaces.Box(
+                low=observation_space_min,
+                high=observation_space_max,
+                shape=(food_count, object_count),
+                dtype=observation_space_dtype,
+            ),
             'food_holding': gym.spaces.Discrete(3),
             'food_in_fridge': gym.spaces.Discrete(food_count),
         })
 
         # Initialize observation and metadata
         self.observation = self.observation_space.sample()
-        self.vh_metadata = {
-            'character_id': 0,  # ID of the character in the environment
-            'food_id_bidict': bidict({}),  # Bidirectional mapping between food names and IDs
-            'object_id_bidict': bidict({}),  # Bidirectional mapping between object names and IDs
-            'step': 0,  # Current step count in the episode
-            'instruction_list': [], # Instruction list to execute by virtual home
-            'food_exist_count': 0, # All the existing food in the environment
-        }
+        self.vh_metadata = self._process_reset_metadata()
 
     def reset(
             self,
@@ -124,14 +161,19 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             tuple[ObsType, dict[str, Any]]: A tuple containing the initial observation and a dictionary of additional information.
         """
         environment_index, character = self._process_reset_options(options)
+
+        res = self.comm.add_character(character)
+
+        if not res:
+            raise ValueError("Failed to add character")
         res = self.comm.reset(environment_index)
-        self.comm.add_character(character)
         if not res:
             raise ValueError("Virtual Home environment reset failed")
         res, g = self.comm.environment_graph()
         if not res:
             raise ValueError("Failed to get Virtual Home environment graph")
-        self._process_reset_metadata()
+
+        self.vh_metadata = self._process_reset_metadata()
         self._process_environment_graph(g)
 
         return self.observation, self.vh_metadata
@@ -168,37 +210,15 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             The method also handles various interaction types like walking to food, grabbing food, putting food into objects, opening/closing objects, etc.
 
         """
-
-        action_type, _, _ = action
-        action_type += 1 # Adjust action type (possible offset)
-
-        # Check if the maximum steps have been reached
-        is_done = self.vh_metadata['step'] >= self.MAX_GAME_STEP
-        # Increment the step count
-        self.vh_metadata['step'] += 1
-
-        if action_type == ActionEnum.WALK_TO_FOOD:
-            return self._action_walk_to_food(action, is_done)
-
-        elif action_type == ActionEnum.WALK_TO_OBJECT:
-            return self._action_walk_to_object(action, is_done)
-
-        elif action_type == ActionEnum.GRAB:
-            return self._action_grab(action, is_done)
-
-        elif action_type == ActionEnum.PUT:
-            return self._action_put(action, is_done)
-
-        elif action_type == ActionEnum.PUTIN:
-            return self._action_putin(action, is_done)
-
-        elif action_type == ActionEnum.OPEN:
-            return self._action_open(action, is_done)
-
-        elif action_type == ActionEnum.CLOSE:
-            return self._action_close(action, is_done)
-
-        return self.observation, 0, is_done, False, self.vh_metadata
+        self.logger.debug('----start step----')
+        self.logger.debug(f'action: {action_list[action[0]]}, food: {food_list[action[1]]}, object: {object_list[action[2]]}')
+        res = self._step_wrapper(action)
+        self.logger.debug(f'observation: {self.observation}')
+        self.logger.debug(f'vh_metadata: {self.vh_metadata}')
+        self.logger.debug(f'reward: {res[1]}')
+        self.logger.debug(f'is_done: {res[2]}')
+        self.logger.debug('----end step----\n')
+        return res
 
     def render(self):
         """
@@ -211,6 +231,62 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         Closes the environment and releases any resources.
         """
         self.comm.close()
+
+    def print_instruct(self) -> List[str]:
+        return self.vh_metadata['instruction_list']
+
+    def _step_wrapper(
+            self, action: ActType
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+
+        # If the fridge not exist, quit direct
+        if not self.vh_metadata['fridge_exist_flag']:
+            return self.observation, 0, True, False, self.vh_metadata
+
+        action_type, _, _ = action
+
+        # Check if the maximum steps have been reached
+        is_done = self.vh_metadata['step'] >= self.MAX_GAME_STEP
+        # Increment the step count
+        self.vh_metadata['step'] += 1
+
+        res = (self.observation, 0, is_done, False, self.vh_metadata)
+        if action_type == ActionEnum.WALK_TO_FOOD:
+            res = self._action_walk_to_food(action, is_done)
+
+        elif action_type == ActionEnum.WALK_TO_OBJECT:
+            res = self._action_walk_to_object(action, is_done)
+
+        elif action_type == ActionEnum.GRAB:
+            res = self._action_grab(action, is_done)
+
+        elif action_type == ActionEnum.PUT:
+            res = self._action_put(action, is_done)
+
+        elif action_type == ActionEnum.PUTIN:
+            res = self._action_putin(action, is_done)
+
+        elif action_type == ActionEnum.OPEN:
+            res = self._action_open(action, is_done)
+
+        elif action_type == ActionEnum.CLOSE:
+            res = self._action_close(action, is_done)
+
+        # If the number of the food in fridge equals number of the existing food
+        if self.observation['food_in_fridge'] >= self.vh_metadata['food_exist_count']:
+            # Check if the fridge closed:
+            object_fridge_index = object_index_dict['fridge']
+            # remaining steps:
+            remaining_steps = self.MAX_GAME_STEP - self.vh_metadata['step']
+            if not self.observation['object_state'][object_fridge_index] & ObjectStateBitmapEnum.OPEN:
+                # Fridge closed:
+                finial_reward = self.TASK_FINISH_REWARD + remaining_steps * self.BONUS_PER_STEP
+                return self.observation, finial_reward, True, False, self.vh_metadata
+            else:
+                finial_reward = remaining_steps * self.BONUS_PER_STEP
+                return self.observation, finial_reward, True, False, self.vh_metadata
+
+        return res
 
     def _action_walk_to_food(
             self,
@@ -267,8 +343,9 @@ class VirtualHomeGatherFoodEnv(gym.Env):
                 self.observation['food_character_relation'][i] = FoodCharacterStateEnum.CLOSE_TO | 0
                 continue  # Skip this food item since it's the one we're walking to
             if self.observation['food_character_relation'][i] == FoodCharacterStateEnum.HOLD:
-                # If the character is holding another food item, reset its relation to NONE
-                self.observation['food_character_relation'][i] = FoodCharacterStateEnum.NONE | 0
+                # If the character is holding another food item, skip
+                continue
+            self.observation['food_character_relation'][i] = FoodCharacterStateEnum.NONE | 0
 
         # Create a virtual-home instruction based on the current action
         instruction = self._process_step_instruction(action)
@@ -397,7 +474,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         # Check if the food is inside an object and whether the object is open.
         # If the food is inside a closed object, return a punishment.
         none_close_object_index = -1
-        for i in range(food_count):
+        for i in range(object_count):
             if self.observation['food_object_relation'][food_index][i] == FoodObjectStateEnum.INSIDE:
                 none_close_object_index = i
 
@@ -425,8 +502,10 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         instruction = self._process_step_instruction(action)
         self.vh_metadata['instruction_list'].append(instruction)
 
+        agent_reward = self._process_food_in_fridge()
+
         # Return the updated observation with no immediate reward for successfully grabbing the food.
-        return self.observation, 0, is_done, False, self.vh_metadata
+        return self.observation, agent_reward, is_done, False, self.vh_metadata
 
     def _action_put(
             self,
@@ -578,21 +657,10 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         instruction = self._process_step_instruction(action)
         self.vh_metadata['instruction_list'].append(instruction)
 
-        # Reward Calculation: Check if the food was successfully put into the fridge
-        food_in_fridge = 0
-        object_fridge_index = object_index_dict['fridge']
-
-        # Count the number of food items inside the fridge
-        for i in range(food_count):
-            if self.observation['food_object_relation'][i][food_in_fridge] == FoodObjectStateEnum.INSIDE:
-                food_in_fridge += 1
-
-        # The reward is based on the number of food items inside the fridge compared to the target food count
-        agent_reward = (object_fridge_index - self.observation['food_in_fridge']) * self.TARGET_REACHED_REWARD
-        self.observation['food_in_fridge'] = food_in_fridge
-
-        if self.observation['food_in_fridge'] >= self.vh_metadata['food_exist_count']:
-            return self.observation, agent_reward, True, False, self.vh_metadata
+        agent_reward = self._process_food_in_fridge()
+        # Notice: We don't check here because we do this at the beginning of the function `self.reset`
+        # if self.observation['food_in_fridge'] >= self.vh_metadata['food_exist_count']:
+        #     return self.observation, agent_reward, True, False, self.vh_metadata
 
         # Return the updated observation, the calculated reward, and the metadata
         return self.observation, agent_reward, is_done, False, self.vh_metadata
@@ -722,12 +790,11 @@ class VirtualHomeGatherFoodEnv(gym.Env):
     def _process_step_instruction(self, action: ActType) -> str:
         self.none = None
         action_type, food_index, obj_index = action
-        action_type += 1
 
-        food_class_name = food_index_dict[food_index]
+        food_class_name = food_list[food_index]
         food_vh_id = self.vh_metadata['food_id_bidict'][food_class_name]
 
-        object_class_name = object_index_dict[obj_index]
+        object_class_name = object_list[obj_index]
         object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
 
         if action_type == ActionEnum.WALK_TO_FOOD:
@@ -778,16 +845,21 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             g (Any): The environment graph returned by UnityCommunication.
         """
         # 1. Find all objects in the environment graph
-        food_state_list = [FoodStateBitmapEnum.NONE | 0 for _ in range(food_count)]
-        obj_state_list = [ObjectStateBitmapEnum.NONE | 0 for _ in range(object_count)]
-        food_exist_count = 0
+        observation_space_dtype = self.OBSERVATION_SPACE_DTYPE
+        food_state_list = np.array(
+            [FoodStateBitmapEnum.NONE | 0 for _ in range(food_count)],
+            dtype=observation_space_dtype,
+        )
+        obj_state_list = np.array(
+            [ObjectStateBitmapEnum.NONE | 0 for _ in range(object_count)],
+            dtype = observation_space_dtype,
+        )
 
         for node in g['nodes']:
             if node['class_name'] in food_list:
                 target_food_index = food_index_dict[node['class_name']]
                 food_state_list[target_food_index] |= FoodStateBitmapEnum.EXIST
                 self.vh_metadata['food_id_bidict'][node['class_name']] = node['id']
-                food_exist_count += 1
 
             if node['class_name'] in object_list:
                 target_object_index = object_index_dict[node['class_name']]
@@ -810,9 +882,18 @@ class VirtualHomeGatherFoodEnv(gym.Env):
                 self.vh_metadata['character_id'] = node['id']
 
         # 2. Find all relations (edges) in the environment graph
-        food_character_relation = [FoodCharacterStateEnum.NONE | 0 for _ in range(food_count)]
-        object_character_relation = [ObjectCharacterStateEnum.NONE | 0 for _ in range(object_count)]
-        food_object_relation = [[FoodObjectStateEnum.NONE | 0 for _ in range(object_count)] for _ in range(food_count)]
+        food_character_relation = np.array(
+            [FoodCharacterStateEnum.NONE | 0 for _ in range(food_count)],
+            dtype=observation_space_dtype,
+        )
+        object_character_relation = np.array(
+            [ObjectCharacterStateEnum.NONE | 0 for _ in range(object_count)],
+            dtype=observation_space_dtype,
+        )
+        food_object_relation = np.array(
+            [[FoodObjectStateEnum.NONE | 0 for _ in range(object_count)] for _ in range(food_count)],
+            dtype=observation_space_dtype,
+        )
         food_holding = 0
 
         for edge in g['edges']:
@@ -855,6 +936,16 @@ class VirtualHomeGatherFoodEnv(gym.Env):
                     food_character_relation[food_index] = FoodCharacterStateEnum.HOLD | 0
                     food_holding += 1
 
+        food_in_fridge = 0
+        fridge_object_index = object_index_dict['fridge']
+        if obj_state_list[fridge_object_index] & ObjectStateBitmapEnum.EXIST:
+            for i in range(len(food_object_relation)):
+                if food_object_relation[i][fridge_object_index] & FoodObjectStateEnum.INSIDE:
+                    food_in_fridge += 1
+            self.vh_metadata['fridge_exist_flag'] = True
+        else:
+            self.vh_metadata['fridge_exist_flag'] = False
+
         # 3. Update the observation with the processed data
         self.observation = {
             'food_state': food_state_list,
@@ -863,19 +954,59 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             'object_character_relation': object_character_relation,
             'food_object_relation': food_object_relation,
             'food_holding': food_holding,
-            'food_in_fridge': 0,
+            'food_in_fridge': food_in_fridge,
         }
+
+        food_exist_count = 0
+        for i in range(len(food_state_list)):
+            if food_state_list[i] & FoodStateBitmapEnum.EXIST:
+                food_exist_count += 1
+
         self.vh_metadata['food_exist_count'] = food_exist_count
 
-    def _process_reset_metadata(self):
+    def _process_reset_metadata(self) -> dict[str, Any]:
         """
         Resets the metadata to its initial state.
         """
-        self.vh_metadata = {
-            'character_id': 0,
-            'food_id_bidict': bidict({}),
-            'object_id_bidict': bidict({}),
-            'step': 0,
-            'food_exist_count': 0,
+        self.none = None
+        return  {
+            'character_id': 0,  # ID of the character in the environment
+            'food_id_bidict': bidict({}),  # Bidirectional mapping between food names and IDs
+            'object_id_bidict': bidict({}),  # Bidirectional mapping between object names and IDs
+            'step': 0,  # Current step count in the episode
+            'instruction_list': [], # Instruction list to execute by virtual home
+            'food_exist_count': 0, # All the existing food in the environment
+            'fridge_exist_flag': False # If the fridge exist
         }
+    def _process_food_in_fridge(self) -> int :
+        """
+            Process the food items in the fridge and calculate the reward based on the number of food items inside.
+
+            Returns:
+                int: The calculated agent reward based on the number of food items inside the fridge.
+
+            Explanation:
+                This method counts how many food items are currently inside the fridge by checking the
+                food-object relation. The reward is calculated by comparing the current count of food in the
+                fridge to the target number of food items and applying the reward based on the difference.
+                The reward is then returned and the current food count in the fridge is updated in the observation.
+
+                The reward calculation is as follows:
+                - If the food count inside the fridge is higher than the target, the agent receives a positive reward.
+                - If the food count inside the fridge is lower than the target, the agent receives a negative reward.
+
+            """
+        # Reward Calculation: Check if the food was successfully put into the fridge
+        food_in_fridge = 0
+        object_fridge_index = object_index_dict['fridge']
+
+        # Count the number of food items inside the fridge
+        for i in range(food_count):
+            if self.observation['food_object_relation'][i][object_fridge_index] == FoodObjectStateEnum.INSIDE:
+                food_in_fridge += 1
+
+        # The reward is based on the number of food items inside the fridge compared to the target food count
+        agent_reward = (food_in_fridge - self.observation['food_in_fridge']) * self.TARGET_REACHED_REWARD
+        self.observation['food_in_fridge'] = food_in_fridge
+        return agent_reward
 

@@ -21,8 +21,8 @@ class ObjectStateBitmapEnum(IntEnum):
     EXIST = 1
     OPEN = 2
     CAN_OPEN = 4
-    HAS_SWITCH = 8
-    TURNED_ON = 16
+    TURNED_ON = 8
+    HAS_SWITCH = 16
 
 
 class FoodCharacterStateEnum(IntEnum):

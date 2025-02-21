@@ -7,7 +7,15 @@ import torch as th
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer  # 示例导入，根据实际LLM调整
 
+"""
 
+Args:
+
+Returns:
+
+Explanation:
+
+"""
 # 自定义网络结构，这里继承BaseFeaturesExtractor方便处理输入特征
 class CustomFeatureExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space, features_dim=64):
