@@ -7,29 +7,6 @@ from bidict import bidict
 import logging
 from .env_graph_enum import *
 
-# class VirtualHomeEnv(gym.Env):
-#     def __init__(self) -> None:
-#         super(VirtualHomeEnv, self).__init__()
-#
-#     def reset(
-#             self,
-#             *,
-#             seed: int | None = None,
-#             options: dict[str, Any] | None = None,
-#     ) -> tuple[ObsType, dict[str, Any]]:
-#         pass
-#
-#     def step(
-#             self, action: ActType
-#     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-#         pass
-#
-#     def render(self):
-#         pass
-#
-#     def close(self):
-#         pass
-
 food_list = ['salmon', 'apple', 'bananas', 'pancake', 'peach', 'pear', 'pie', 'potato',
              'salad', 'tomato', 'wine', 'beer', 'plum', 'orange', 'milkshake', 'mincedmeat',
              'lemon', 'juice', 'chocolatesyrup', 'chicken', 'carrot']
@@ -39,7 +16,7 @@ object_list = ['microwave', 'coffeetable', 'kitchentable', 'wallshelf', 'kitchen
                'stove']
 object_count = len(object_list)
 
-action_list = ['none', 'walk_to_food', 'walk_to_object', 'grab', 'put', 'putin', 'open', 'close']
+action_list = ['none', 'stop' ,'walk_to_food', 'walk_to_object', 'grab', 'put', 'putin', 'open', 'close']
 action_count = len(action_list)
 
 food_index_dict = {food: i for i, food in enumerate(food_list)}
@@ -49,18 +26,23 @@ object_index_dict = {single_object:i for i, single_object in enumerate(object_li
 
 class VirtualHomeGatherFoodEnv(gym.Env):
 
+    # Reward when the character reaches the target (e.g., a food item or an object)
     TARGET_REACHED_REWARD = 50
 
+    # Reward when the entire food - gathering task is finished
     TASK_FINISH_REWARD = 200
 
+    # Bonus reward given per step, which can encourage the agent to complete the task in fewer steps
     BONUS_PER_STEP = 1
 
+    # Punishment reward for invalid actions or actions that do not lead to progress
     PUNISHMENT_REWARD = -10
 
+    # The maximum number of steps allowed in a single episode of the game
     MAX_GAME_STEP = 256
 
+    # Data type used for the observation space, here it is set to 8 - bit unsigned integer
     OBSERVATION_SPACE_DTYPE = np.uint8
-
 
     def __init__(self, comm: UnityCommunication) -> None:
         """
@@ -176,6 +158,10 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         self.vh_metadata = self._process_reset_metadata()
         self._process_environment_graph(g)
 
+        # If the fridge not exist, raise an exception
+        if not self.vh_metadata['fridge_exist_flag']:
+            raise ValueError("Virtual Home environment fridge does not exist")
+
         return self.observation, self.vh_metadata
 
 
@@ -232,16 +218,13 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         """
         self.comm.close()
 
+
     def print_instruct(self) -> List[str]:
         return self.vh_metadata['instruction_list']
 
     def _step_wrapper(
             self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-
-        # If the fridge not exist, quit direct
-        if not self.vh_metadata['fridge_exist_flag']:
-            return self.observation, 0, True, False, self.vh_metadata
 
         action_type, _, _ = action
 
@@ -251,6 +234,20 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         self.vh_metadata['step'] += 1
 
         res = (self.observation, 0, is_done, False, self.vh_metadata)
+
+        if action_type == ActionEnum.STOP:
+            # Check if the fridge closed:
+            object_fridge_index = object_index_dict['fridge']
+            # remaining steps:
+            remaining_steps = self.MAX_GAME_STEP - self.vh_metadata['step']
+            if not self.observation['object_state'][object_fridge_index] & ObjectStateBitmapEnum.OPEN:
+                # Fridge closed:
+                finial_reward = self.TASK_FINISH_REWARD + remaining_steps * self.BONUS_PER_STEP
+                return self.observation, finial_reward, True, False, self.vh_metadata
+            else:
+                finial_reward = remaining_steps * self.BONUS_PER_STEP
+                return self.observation, finial_reward, True, False, self.vh_metadata
+
         if action_type == ActionEnum.WALK_TO_FOOD:
             res = self._action_walk_to_food(action, is_done)
 
@@ -271,20 +268,6 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
         elif action_type == ActionEnum.CLOSE:
             res = self._action_close(action, is_done)
-
-        # If the number of the food in fridge equals number of the existing food
-        if self.observation['food_in_fridge'] >= self.vh_metadata['food_exist_count']:
-            # Check if the fridge closed:
-            object_fridge_index = object_index_dict['fridge']
-            # remaining steps:
-            remaining_steps = self.MAX_GAME_STEP - self.vh_metadata['step']
-            if not self.observation['object_state'][object_fridge_index] & ObjectStateBitmapEnum.OPEN:
-                # Fridge closed:
-                finial_reward = self.TASK_FINISH_REWARD + remaining_steps * self.BONUS_PER_STEP
-                return self.observation, finial_reward, True, False, self.vh_metadata
-            else:
-                finial_reward = remaining_steps * self.BONUS_PER_STEP
-                return self.observation, finial_reward, True, False, self.vh_metadata
 
         return res
 
@@ -1010,3 +993,32 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         self.observation['food_in_fridge'] = food_in_fridge
         return agent_reward
 
+
+
+
+
+
+
+
+# class VirtualHomeEnv(gym.Env):
+#     def __init__.py(self) -> None:
+#         super(VirtualHomeEnv, self).__init__.py()
+#
+#     def reset(
+#             self,
+#             *,
+#             seed: int | None = None,
+#             options: dict[str, Any] | None = None,
+#     ) -> tuple[ObsType, dict[str, Any]]:
+#         pass
+#
+#     def step(
+#             self, action: ActType
+#     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+#         pass
+#
+#     def render(self):
+#         pass
+#
+#     def close(self):
+#         pass

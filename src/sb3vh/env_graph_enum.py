@@ -2,13 +2,15 @@ from enum import IntEnum
 
 class ActionEnum(IntEnum):
     NONE = 0
-    WALK_TO_FOOD = 1
-    WALK_TO_OBJECT = 2
-    GRAB = 3
-    PUT = 4
-    PUTIN = 5
-    OPEN = 6
-    CLOSE = 7
+    STOP = 1
+    WALK_TO_FOOD = 2
+    WALK_TO_OBJECT = 3
+    GRAB = 4
+    PUT = 5
+    PUTIN = 6
+    OPEN = 7
+    CLOSE = 8
+
 
 # BitMap
 class FoodStateBitmapEnum(IntEnum):
