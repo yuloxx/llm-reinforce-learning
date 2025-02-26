@@ -142,11 +142,41 @@ def operate_salmon_script_test():
     res = comm.render_script(script, recording=True, skip_animation=False)
     print(res)
 
+def operate_food_script_test():
+    from src.vh_util.env_graph import query_node_id_by_classname
+
+    comm = comm_unity.UnityCommunication(file_name=YOUR_FILE_NAME)
+
+    for i in range(7):
+        print(f'--- environment {i} ---')
+        for food in food_list:
+            res = comm.reset(i)
+            res, g = comm.environment_graph()
+            comm.add_character('Chars/Male1')
+
+            food_id = query_node_id_by_classname(food, g)
+            fridge_id = query_node_id_by_classname('fridge', g)
+
+            if food_id is not None:
+                script = [
+                    f'<char0> [walk] <{food}> ({food_id})',
+                    f'<char0> [grab] <{food}> ({food_id})',
+                    f'<char0> [walk] <fridge> ({fridge_id})',
+                    f'<char0> [open] <fridge> ({fridge_id})',
+                    f'<char0> [putin] <{food}> ({food_id}) <fridge> ({fridge_id})',
+                    f'<char0> [close] <fridge> ({fridge_id})',
+                ]
+                res = comm.render_script(script, recording=False, skip_animation=True)
+                print(f'food {food}: {res}')
+
+    comm.close()
+
+
 if __name__ == '__main__':
     # find_food_test()
     # find_object_test()
     # find_character_relation_test()
     # operate_food_test()
     # object_properties_test()
-    operate_salmon_script_test()
-
+    # operate_salmon_script_test()
+    operate_food_script_test()
