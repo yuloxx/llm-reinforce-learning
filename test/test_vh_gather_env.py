@@ -467,6 +467,22 @@ class VhGatherEnvTest(unittest.TestCase):
         print(f'instruct sequence: {self.vh_env.print_instruct()}')
         self.assertTrue(float(tup[1]) < 0.)
 
+    def test_t_env1_grab_food_one_by_one(self):
+        self.vh_env.reset(options={
+            'environment_index': 1,
+        })
+
+        food_list = ['chicken','chocolatesyrup']
+
+        for food in food_list:
+            self.util_put_food_in_fridge(food)
+
+        self.util_stop_epoch()
+
+        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        self.assertTrue(True)
+
     def test_t_env1_grab_chicken(self):
         self.vh_env.reset(options={
             'environment_index': 1,
@@ -490,6 +506,7 @@ class VhGatherEnvTest(unittest.TestCase):
 
         print(f'instruct sequence: {self.vh_env.print_instruct()}')
         self.assertTrue(True)
+
 
     def test_f_env1_open_object_with_no_freehand(self):
         self.vh_env.reset(options={
