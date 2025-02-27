@@ -286,7 +286,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
         if action_type == ActionEnum.STOP:
             # Task not finished
-            if self.observation['food_in_fridge'] <= self.vh_metadata['food_exist_count']:
+            if self.observation['food_in_fridge'] < self.vh_metadata['food_exist_count']:
                 return self.observation, 0, True, False, self.vh_metadata
             # Check if the fridge closed:
             object_index_dict = self.get_object_index_dict()
