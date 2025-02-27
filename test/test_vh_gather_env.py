@@ -532,6 +532,86 @@ class VhGatherEnvTest(unittest.TestCase):
         print(f'instruct sequence: {self.vh_env.print_instruct()}')
         self.assertTrue(float(tup[1]) < 0.)
 
+    def test_t_env2_grab_food_one_by_one(self):
+        self.vh_env.reset(options={
+            'environment_index': 2,
+        })
+
+        food_list = ['salmon','mincedmeat','juice']
+
+        for food in food_list:
+            self.util_put_food_in_fridge(food)
+
+        self.util_stop_epoch()
+
+        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        self.assertTrue(True)
+
+
+    def test_t_env3_grab_food_one_by_one(self):
+        self.vh_env.reset(options={
+            'environment_index': 3,
+        })
+
+        food_list = ['pancake','pear','milkshake', 'chocolatesyrup']
+
+        for food in food_list:
+            self.util_put_food_in_fridge(food)
+
+        self.util_stop_epoch()
+
+        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        self.assertTrue(True)
+
+    def test_t_env4_grab_food_one_by_one(self):
+        self.vh_env.reset(options={
+            'environment_index': 4,
+        })
+
+        food_list = ['pie','mincedmeat','chocolatesyrup']
+
+        for food in food_list:
+            self.util_put_food_in_fridge(food)
+
+        self.util_stop_epoch()
+
+        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        self.assertTrue(True)
+
+    def test_t_env5_grab_food_(self):
+        self.vh_env.reset(options={
+            'environment_index': 5,
+        })
+
+        food_list = ['salad','carrot']
+
+        for food in food_list:
+            self.util_put_food_in_fridge(food)
+
+        self.util_stop_epoch()
+
+        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        self.assertTrue(True)
+
+    def test_t_env6_grab_food_one_by_one(self):
+        self.vh_env.reset(options={
+            'environment_index': 6,
+        })
+
+        food_list = ['wine','juice','chocolatesyrup', 'chicken']
+
+        for food in food_list:
+            self.util_put_food_in_fridge(food)
+
+        self.util_stop_epoch()
+
+        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        self.assertTrue(True)
 
 
 if __name__ == '__main__':
