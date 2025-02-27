@@ -363,7 +363,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         _, food_index, obj_index = action  # Unpack the action tuple: action_type, food_index, obj_index.
 
         # Check if the target food item exists in the environment
-        if not self.observation['food_state'][obj_index] & FoodStateBitmapEnum.EXIST:
+        if not self.observation['food_state'][food_index] & FoodStateBitmapEnum.EXIST:
             # If the food doesn't exist (its 'EXIST' flag is not set), apply a negative reward
             return self.observation, self.PUNISHMENT_REWARD, is_done, False, self.vh_metadata
 
@@ -757,6 +757,10 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         if not self.observation['object_character_relation'][obj_index] == ObjectCharacterStateEnum.CLOSE_TO:
             return self.observation, self.PUNISHMENT_REWARD, is_done, False, self.vh_metadata
 
+        # Check if the character has no hand. If not, return a punishment
+        if self.observation['food_holding'] >= 2:
+            return self.observation, self.PUNISHMENT_REWARD, is_done, False, self.vh_metadata
+
         # Open the object by updating its state to reflect that it's now open.
         self.observation['object_state'][obj_index] |= ObjectStateBitmapEnum.OPEN
 
@@ -818,6 +822,10 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         if not self.observation['object_character_relation'][obj_index] == ObjectCharacterStateEnum.CLOSE_TO:
             return self.observation, self.PUNISHMENT_REWARD, is_done, False, self.vh_metadata
 
+        # Check if the character has no hand. If not, return a punishment
+        if self.observation['food_holding'] >= 2:
+            return self.observation, self.PUNISHMENT_REWARD, is_done, False, self.vh_metadata
+
         # Close the object by updating its state to reflect that it's now closed.
         self.observation['object_state'][obj_index] &= ~ObjectStateBitmapEnum.OPEN
 
@@ -832,25 +840,37 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         self.none = None
         action_type, food_index, obj_index = action
 
-        food_class_name = self.FOOD_LIST[food_index]
-        food_vh_id = self.vh_metadata['food_id_bidict'][food_class_name]
-
-        object_class_name = self.OBJECT_LIST[obj_index]
-        object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
-
         if action_type == ActionEnum.WALK_TO_FOOD:
+            food_class_name = self.FOOD_LIST[food_index]
+            food_vh_id = self.vh_metadata['food_id_bidict'][food_class_name]
             return f'<char0> [walk] <{food_class_name}> ({food_vh_id})'
         elif action_type == ActionEnum.WALK_TO_OBJECT:
+            object_class_name = self.OBJECT_LIST[obj_index]
+            object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
             return f'<char0> [walk] <{object_class_name}> ({object_vh_id})'
         elif action_type == ActionEnum.GRAB:
+            food_class_name = self.FOOD_LIST[food_index]
+            food_vh_id = self.vh_metadata['food_id_bidict'][food_class_name]
             return f'<char0> [grab] <{food_class_name}> ({food_vh_id})'
         elif action_type == ActionEnum.PUT:
+            food_class_name = self.FOOD_LIST[food_index]
+            food_vh_id = self.vh_metadata['food_id_bidict'][food_class_name]
+            object_class_name = self.OBJECT_LIST[obj_index]
+            object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
             return f'<char0> [put] <{food_class_name}> ({food_vh_id}) <{object_class_name}> ({object_vh_id})'
         elif action_type == ActionEnum.PUTIN:
+            food_class_name = self.FOOD_LIST[food_index]
+            food_vh_id = self.vh_metadata['food_id_bidict'][food_class_name]
+            object_class_name = self.OBJECT_LIST[obj_index]
+            object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
             return f'<char0> [putin] <{food_class_name}> ({food_vh_id}) <{object_class_name}> ({object_vh_id})'
         elif action_type == ActionEnum.OPEN:
+            object_class_name = self.OBJECT_LIST[obj_index]
+            object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
             return f'<char0> [open] <{object_class_name}> ({object_vh_id})'
         elif action_type == ActionEnum.CLOSE:
+            object_class_name = self.OBJECT_LIST[obj_index]
+            object_vh_id = self.vh_metadata['object_id_bidict'][object_class_name]
             return f'<char0> [close] <{object_class_name}> ({object_vh_id})'
         return ''
 
