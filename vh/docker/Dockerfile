@@ -124,7 +124,7 @@ RUN apt-get update && apt-get -y upgrade
 RUN apt-get install -y xvfb
 
 
-# port 8080 is the port used in in Editor training.
+# port 8080 is the port used in in Editor train.
 EXPOSE 8080
 
 ENTRYPOINT ["./run_sim.sh"]

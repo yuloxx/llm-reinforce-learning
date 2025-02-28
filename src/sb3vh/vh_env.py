@@ -1,8 +1,7 @@
 import gymnasium as gym
 import numpy as np
 from gymnasium.core import ActType, ObsType
-from typing import Any, SupportsFloat, List
-from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
+from typing import Any, SupportsFloat, Dict, List
 from bidict import bidict
 import logging
 from .env_graph_enum import *
@@ -27,8 +26,6 @@ class VirtualHomeGatherFoodEnv(gym.Env):
     # Data type used for the observation space, here it is set to 8 - bit unsigned integer
     OBSERVATION_SPACE_DTYPE = np.uint8
 
-    # The least level of a log to be printed in the console
-    LOG_LEVEL = logging.DEBUG
 
     FOOD_LIST = [
         'salmon',
@@ -91,25 +88,62 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         object_index_dict = {single_object: i for i, single_object in enumerate(cls.OBJECT_LIST)}
         return object_index_dict
 
-    def __init__(self, comm: UnityCommunication) -> None:
+    def __init__(
+            self,
+            environment_graph: Dict[str, Any],
+            log_level: str = 'info',
+    ) -> None:
         """
         Initializes the VirtualHomeGatherFoodEnv environment.
 
+        This environment implements a food gathering task in VirtualHome with configurable
+        action and observation spaces. The observation space provides comprehensive information
+        about the environment state and relationships between entities.
+
         Args:
-            comm (UnityCommunication): An instance of UnityCommunication for interacting with the Virtual Home environment.
+            environment_graph (Dict[str, Any]): Initial environment state graph from Virtual Home
+                containing nodes (objects, characters) and edges (relationships). The graph should
+                include positions, states, and relationships between entities.
+            log_level (str): Logger severity level. Supported values: 'debug', 'info',
+                'warning', 'error' (case-insensitive). Defaults to "info".
+
+        Raises:
+            ValueError: If invalid log_level is provided or environment_graph has unexpected structure
+            TypeError: If environment_graph is not a dictionary
+
+        Explanation:
+            1. Initializes base gym.Env class through inheritance
+            2. Configures logger with specified severity level
+            3. Defines MultiDiscrete action space with three dimensions:
+               - Action type selection
+               - Primary object (food) interaction
+               - Secondary object interaction
+            4. Constructs dictionary observation space containing:
+               - Entity states (food/object existence)
+               - Spatial relationships (character-food/object-object)
+               - Inventory/fridge state tracking
+            5. Initializes observation buffer and Virtual Home metadata
+
+        Example:
+            >>> from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
+            >>> PATH_TO_YOUR_VIRTUALHOME_EXECUTABLE = './xxx/virtualhome.exe'
+            >>> comm = UnityCommunication(file_name=PATH_TO_YOUR_VIRTUALHOME_EXECUTABLE)
+            >>> comm.reset(0)
+            >>> comm.add_character('Chars/Male1')
+            >>> res, g = comm.environment_graph()
+            >>> env = VirtualHomeGatherFoodEnv(
+            ...     environment_graph=g,
+            ...     log_level="debug"
+            ... )
         """
 
         action_count, food_count, object_count = self.get_action_count(), self.get_food_count(), self.get_object_count()
 
         super(VirtualHomeGatherFoodEnv, self).__init__()
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(self.LOG_LEVEL)
-        if not self.logger.handlers:
-            console_handler = logging.StreamHandler()
-            self.logger.addHandler(console_handler)
+        self._add_logger(log_level)
 
         self.none = None  # Placeholder for unused variables
-        self.comm = comm  # UnityCommunication instance for environment interaction
+        self.environment_graph = environment_graph # reset initial environment_graph passed by virtual home communicator
 
         # Define the action space for the character in Virtual Home:
         # - First dimension: Six action types (included in action_list).
@@ -176,37 +210,36 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             *,
             seed: int | None = None,
-            options: dict[str, Any] | None = None,
-    ) -> tuple[ObsType, dict[str, Any]]:
+            options: Dict[str, Any] | None = None,
+    ) -> tuple[ObsType, Dict[str, Any]]:
         """
-        Resets the environment to an initial state.
+        Reset the environment to an initial state and return the initial observation.
+
+        This method performs the following operations in sequence:
+        1. Initialize the environment's random number generator with the given seed
+        2. Process environment metadata and graph structure
+        3. Validate required objects in the environment
+        4. Generate initial observation based on the processed state
 
         Args:
-            seed (int | None, optional): The seed for the random number generator. Defaults to None.
-            options (dict[str, Any] | None, optional): A dictionary of additional options to configure the reset behavior.
-                Possible keys include:
-                    - "environment_index" (int): Indicates which virtual home to choose. Expected range: 0~6. Defaults to 0.
-                    - "character" (str): Indicates which character to choose. Refer to
-                      http://virtual-home.org/documentation/master/kb/agents.html for more details. Defaults to "Chars/Male1".
+            seed (int | None, optional): Seed for the environment's random number generator.
+                A None value will initialize the RNG without a fixed seed. Defaults to None.
+            options (Dict[str, Any] | None, optional): Additional configuration options for
+                environment reset. Currently not implemented, reserved for future extensions.
+                Defaults to None.
 
         Returns:
-            tuple[ObsType, dict[str, Any]]: A tuple containing the initial observation and a dictionary of additional information.
+            tuple[ObsType, Dict[str, Any]]: Tuple containing:
+                - ObsType: Initial observation of the environment
+                - Dict[str, Any]: Metadata dictionary containing environment's state information
+
+        Raises:
+            ValueError: If required objects (e.g., fridge) are missing in the environment configuration
         """
-        environment_index, character = self._process_reset_options(options)
 
-        res = self.comm.add_character(character)
-
-        if not res:
-            raise ValueError("Failed to add character")
-        res = self.comm.reset(environment_index)
-        if not res:
-            raise ValueError("Virtual Home environment reset failed")
-        res, g = self.comm.environment_graph()
-        if not res:
-            raise ValueError("Failed to get Virtual Home environment graph")
 
         self.vh_metadata = self._process_reset_metadata()
-        self._process_environment_graph(g)
+        self._process_environment_graph(self.environment_graph)
 
         # If the fridge not exist, raise an exception
         if not self.vh_metadata['fridge_exist_flag']:
@@ -216,7 +249,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
     def step(
             self, action: ActType
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Executes an action in the environment, which could involve interacting with food or objects.
 
@@ -227,7 +260,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
                 - obj_index (int): The index of the object to interact with (if applicable)
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action.
                 - A reward, which can be positive, negative, or zero depending on the action outcome.
@@ -254,6 +287,8 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         self.logger.debug(f'reward: {res[1]}')
         self.logger.debug(f'is_done: {res[2]}')
         self.logger.debug('----end step----\n')
+        if res[2]:
+            self.logger.info('episode is finished')
         return res
 
     def render(self):
@@ -266,15 +301,48 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         """
         Closes the environment and releases any resources.
         """
-        self.comm.close()
+        pass
 
-    def print_instruct(self) -> List[str]:
+    def get_instruction_list(self) -> List[str]:
+        """
+        Retrieve the complete history of agent-environment interaction commands.
+
+        Returns:
+            List[str]: Chronological sequence of executed instructions:
+                Example: ['<char0> [walk] <salmon> (328)', '<char0> [putin] <salmon> (328) <fridge> (62)']
+
+        Note:
+            The returned list is a direct reference to the metadata storage. For immutability,
+            consider creating a copy when needing to modify the results.
+        """
         return self.vh_metadata['instruction_list']
+
+    def _add_logger(self, log_level: str):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        log_level = log_level.lower()
+        allowed_levels = {
+            'debug': logging.DEBUG,
+            'info': logging.INFO,
+            'warning': logging.WARNING,
+            'error': logging.ERROR
+        }
+        if log_level not in allowed_levels:
+            raise ValueError(f"Invalid log_level: {log_level}. Must be one of: {list(allowed_levels.keys())}")
+        self.logger.setLevel(allowed_levels[log_level])
+        if not self.logger.handlers:
+            console_handler = logging.StreamHandler()
+            self.logger.addHandler(console_handler)
+
 
     def _step_wrapper(
             self, action: ActType
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
+        """
+        Execute environment step by dispatching actions to type-specific handlers.
 
+        Handles step counting and termination checks before delegating to action-specific
+        methods (STOP/WALK_TO_FOOD/...). Returns standard (obs, reward, done, truncated, info) tuple.
+        """
         action_type, _, _ = action
 
         # Check if the maximum steps have been reached
@@ -328,7 +396,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Handles the action where the character walks towards a specific food item.
 
@@ -338,7 +406,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean flag indicating whether the environment has reached a terminal state (end of the episode).
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 - The updated observation after the character walks to the food.
                 - A reward value (always 0, as no reward is given for just walking).
                 - A boolean indicating whether the episode has ended (based on the step limit).
@@ -370,8 +438,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         # Character is walking towards the food; begin by clearing object-character relations
         # Loop over all objects in the environment and reset the character's interaction state with each one
         for i in range(object_count):
-            self.observation['object_character_relation'][
-                i] = ObjectCharacterStateEnum.NONE | 0  # Reset all object relations to NONE (no interaction)
+            self.observation['object_character_relation'][i] = ObjectCharacterStateEnum.NONE | 0  # Reset all object relations to NONE (no interaction)
 
         # Clear all food-character relations, except for the food item that the character is holding
         # Loop through all food items in the environment
@@ -398,7 +465,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
 
         """
         Executes the action of the character walking to an object in the environment.
@@ -412,7 +479,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean indicating whether the episode has already ended or not.
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action is executed.
                 - A reward, which is 0 in this case (no immediate reward for walking to an object).
@@ -465,7 +532,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Executes the action of the character walking to and grabbing a specific food item in the environment.
 
@@ -478,7 +545,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean indicating whether the episode has already ended.
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action is executed.
                 - A reward, which is 0 if the action was successful, or a punishment reward if the action failed.
@@ -552,7 +619,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Executes the action of putting a food item onto a specific object in the environment.
 
@@ -565,7 +632,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean indicating whether the episode has already ended.
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action is executed.
                 - A reward, which is 0 if the action was successful, or a punishment reward if the action failed.
@@ -625,7 +692,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Executes the action of putting a food item into a specific object (e.g., fridge) in the environment.
 
@@ -638,7 +705,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean indicating whether the episode has already ended.
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action is executed.
                 - A reward, which is calculated based on whether the food was successfully put inside the target object.
@@ -710,7 +777,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Executes the action of opening an object in the environment (e.g., opening a fridge, cupboard).
 
@@ -723,7 +790,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean indicating whether the episode has already ended.
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action is executed.
                 - A reward (0 in this case, as the action is not inherently rewarded or punished).
@@ -775,7 +842,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             self,
             action: ActType,
             is_done: bool,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
         """
         Executes the action of closing an object in the environment (e.g., closing a fridge, cupboard).
 
@@ -788,7 +855,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             is_done (bool): A boolean indicating whether the episode has already ended.
 
         Returns:
-            tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
                 A tuple containing:
                 - The updated observation after the action is executed.
                 - A reward (0 in this case, as the action is not inherently rewarded or punished).
@@ -874,35 +941,12 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             return f'<char0> [close] <{object_class_name}> ({object_vh_id})'
         return ''
 
-    def _process_reset_options(self, options: dict[str, Any] | None = None):
-        """
-        Processes the reset options to determine the environment index and character.
-
-        Args:
-            options (dict[str, Any] | None, optional): A dictionary of reset options. Defaults to None.
-
-        Returns:
-            tuple[int, str]: A tuple containing the environment index and character name.
-        """
-        self.none = None  # Placeholder for unused variables
-        environment_index = 0  # Default environment index
-        character = "Chars/Male1"  # Default character
-        if options is not None:
-            if "environment_index" in options:
-                environment_index_x = options["environment_index"]
-                if isinstance(environment_index_x, int):
-                    if 0 <= environment_index_x <= 6:
-                        environment_index = environment_index_x
-            if "character" in options:
-                character = options["character"]
-        return environment_index, character
-
-    def _process_environment_graph(self, g: Any):
+    def _process_environment_graph(self, g: Dict[str, Any]):
         """
         Processes the environment graph to update the observation and metadata.
 
         Args:
-            g (Any): The environment graph returned by UnityCommunication.
+            g (g: Dict[str, Any]): The environment graph returned by UnityCommunication.
         """
         action_count, food_count, object_count = self.get_action_count(), self.get_food_count(), self.get_object_count()
         food_index_dict, object_index_dict = self.get_food_index_dict(), self.get_object_index_dict()
@@ -1025,7 +1069,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
         self.vh_metadata['food_exist_count'] = food_exist_count
 
-    def _process_reset_metadata(self) -> dict[str, Any]:
+    def _process_reset_metadata(self) -> Dict[str, Any]:
         """
         Resets the metadata to its initial state.
         """

@@ -201,6 +201,6 @@ class UnityLauncher(object):
                     stderr=subprocess.PIPE,
                     shell=True,
                 )
-                raise Exception("Docker training is still not implemented")
+                raise Exception("Docker train is still not implemented")
 
         pass

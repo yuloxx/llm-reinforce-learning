@@ -10,54 +10,58 @@ class VhGatherEnvTest(unittest.TestCase):
 
     def setUp(self):
         self.comm = UnityCommunication(file_name=self.YOUR_FILE_NAME)
-        self.vh_env = VirtualHomeGatherFoodEnv(self.comm)
 
     def tearDown(self):
-        self.vh_env.close()
+        self.comm.close()
 
-    def util_put_food_in_fridge(self, food: str):
+    def util_put_food_in_fridge(self, vh_env: VirtualHomeGatherFoodEnv, food: str):
 
-        food_index_dict = self.vh_env.get_food_index_dict()
+        food_index_dict = vh_env.get_food_index_dict()
         food_index = food_index_dict[food]
-        object_index_dict = self.vh_env.get_object_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, food_index, 0))  # '<char0> [walk] <salmon> (328)'
-        self.vh_env.step(action=(ActionEnum.GRAB, food_index, 0))  # '<char0> [grab] <salmon> (328)'
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))  # '<char0> [walk] <fridge> (314)
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))  # '<char0> [walk] <fridge> (306)'
-        self.vh_env.step(action=(ActionEnum.PUTIN, food_index, object_index))  # '<char0> [putin] <salmon> (328) <fridge> (306)'
-        self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))  # '<char0> [close] <fridge> (306)'
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, food_index, 0))  # '<char0> [walk] <salmon> (328)'
+        vh_env.step(action=(ActionEnum.GRAB, food_index, 0))  # '<char0> [grab] <salmon> (328)'
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))  # '<char0> [walk] <fridge> (314)
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))  # '<char0> [walk] <fridge> (306)'
+        vh_env.step(action=(ActionEnum.PUTIN, food_index, object_index))  # '<char0> [putin] <salmon> (328) <fridge> (306)'
+        vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))  # '<char0> [close] <fridge> (306)'
 
-    def util_stop_epoch(self):
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+    def util_stop_epoch(self, vh_env: VirtualHomeGatherFoodEnv):
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
     # def test_stablebaselines3_checkenv(self):
-    #     check_env(self.vh_env, warn=True, skip_render_check=True)
+    #     check_env(vh_env, warn=True, skip_render_check=True)
     #     self.assertTrue(True)
 
     def test_t_env0_grab_food_one_by_one(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g, log_level='debug')
+        vh_env.reset()
 
         food_list = ['salmon','pie','chocolatesyrup']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
     def test_t_env0_grab_food_fullhands(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         food_list = ['salmon','pie','chocolatesyrup']
@@ -65,304 +69,344 @@ class VhGatherEnvTest(unittest.TestCase):
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))  # '<char0> [walk] <salmon> (328)'
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))  # '<char0> [grab] <salmon> (328)'
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))  # '<char0> [walk] <fridge> (314)
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))  # '<char0> [walk] <fridge> (306)'
-        self.vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))  # '<char0> [putin] <salmon> (328) <fridge> (306)'
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))  # '<char0> [walk] <salmon> (328)'
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))  # '<char0> [grab] <salmon> (328)'
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))  # '<char0> [walk] <fridge> (314)
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))  # '<char0> [walk] <fridge> (306)'
+        vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))  # '<char0> [putin] <salmon> (328) <fridge> (306)'
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, pie_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chocolatesyrup_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, chocolatesyrup_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, pie_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chocolatesyrup_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, chocolatesyrup_index, 0))
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))  # '<char0> [walk] <fridge> (314)
-        self.vh_env.step(action=(ActionEnum.PUTIN, pie_index, object_index))
-        self.vh_env.step(action=(ActionEnum.PUTIN, chocolatesyrup_index, object_index))
-        self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))  # '<char0> [close] <fridge> (306)'
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))  # '<char0> [walk] <fridge> (314)
+        vh_env.step(action=(ActionEnum.PUTIN, pie_index, object_index))
+        vh_env.step(action=(ActionEnum.PUTIN, chocolatesyrup_index, object_index))
+        vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))  # '<char0> [close] <fridge> (306)'
 
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(True)
 
     def test_t_env0_put_food_on_coffeetable(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['coffeetable']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(True)
 
 
     def test_t_env0_put_food_on_fridge(self):
 
         # Character can put food on fridge.
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(True)
 
     def test_t_env0_grab_food_inside_fridge(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
+        tup = vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_grab_2plus_food(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))  # '<char0> [walk] <salmon> (328)'
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))  # '<char0> [grab] <salmon> (328)'
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, pie_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chocolatesyrup_index, 0))
-        tup = self.vh_env.step(action=(ActionEnum.GRAB, chocolatesyrup_index, 0))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))  # '<char0> [walk] <salmon> (328)'
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))  # '<char0> [grab] <salmon> (328)'
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, pie_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chocolatesyrup_index, 0))
+        tup = vh_env.step(action=(ActionEnum.GRAB, chocolatesyrup_index, 0))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
-        
+
     def test_f_env0_grab_food_faraway_food_1(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
-        
+
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
-        
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0)) 
-        tup = self.vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        tup = vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_grab_food_faraway_food_2(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.GRAB, pie_index, 0))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_grab_food_inside_closed_object(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0 , object_index))
-        self.vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0 , object_index))
+        vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
-    
+
     def test_f_env0_put_food_without_grabbed(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_put_food_to_faraway_object(self):
 
-        # Character can put food on fridge.
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        # self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        # vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.PUT, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_putin_food_without_grabbed(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_putin_food_to_faraway_object(self):
 
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        tup = self.vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        tup = vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_putin_food_to_object_not_openable(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['coffeetable']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.PUTIN, salmon_index, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_open_object_not_openable(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['coffeetable']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_open_faraway_object(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
@@ -370,22 +414,24 @@ class VhGatherEnvTest(unittest.TestCase):
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        # self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        # vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_open_object_already_opened(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
@@ -393,223 +439,247 @@ class VhGatherEnvTest(unittest.TestCase):
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_close_object_not_openable(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['coffeetable']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_close_object_already_closed(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
-        tup = self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
+        tup = vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_f_env0_close_faraway_object(self):
-        self.vh_env.reset(options={
-            'environment_index': 0,
-        })
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
+
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
         object_index = object_index_dict['fridge']
 
         salmon_index = food_index_dict['salmon']
         pie_index = food_index_dict['pie']
-        chocolatesyrup_index = object_index_dict['chocolatesyrup']
+        chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
-        tup = self.vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, object_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0, object_index))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, salmon_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, salmon_index, 0))
+        tup = vh_env.step(action=(ActionEnum.CLOSE, 0, object_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_t_env1_grab_food_one_by_one(self):
-        self.vh_env.reset(options={
-            'environment_index': 1,
-        })
+        self.comm.reset(1)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
         food_list = ['chicken','chocolatesyrup']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
     def test_t_env1_grab_chicken(self):
-        self.vh_env.reset(options={
-            'environment_index': 1,
-        })
+        self.comm.reset(1)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
 
         chicken_index = food_index_dict['chicken']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
         fridge_index = object_index_dict['fridge']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chicken_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, chicken_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, fridge_index))
-        self.vh_env.step(action=(ActionEnum.OPEN, 0, fridge_index))
-        self.vh_env.step(action=(ActionEnum.PUTIN, chicken_index, fridge_index))
-        self.vh_env.step(action=(ActionEnum.CLOSE, 0, fridge_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chicken_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, chicken_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, fridge_index))
+        vh_env.step(action=(ActionEnum.OPEN, 0, fridge_index))
+        vh_env.step(action=(ActionEnum.PUTIN, chicken_index, fridge_index))
+        vh_env.step(action=(ActionEnum.CLOSE, 0, fridge_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(True)
 
 
     def test_f_env1_open_object_with_no_freehand(self):
-        self.vh_env.reset(options={
-            'environment_index': 1,
-        })
+        self.comm.reset(1)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
-        food_index_dict = self.vh_env.get_food_index_dict()
-        object_index_dict = self.vh_env.get_object_index_dict()
+        food_index_dict = vh_env.get_food_index_dict()
+        object_index_dict = vh_env.get_object_index_dict()
 
         chicken_index = food_index_dict['chicken']
         chocolatesyrup_index = food_index_dict['chocolatesyrup']
 
         fridge_index = object_index_dict['fridge']
 
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chicken_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, chicken_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chocolatesyrup_index, 0))
-        self.vh_env.step(action=(ActionEnum.GRAB, chocolatesyrup_index, 0))
-        self.vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, fridge_index))
-        tup = self.vh_env.step(action=(ActionEnum.OPEN, 0, fridge_index))
-        self.vh_env.step(action=(ActionEnum.STOP, 0, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chicken_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, chicken_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_FOOD, chocolatesyrup_index, 0))
+        vh_env.step(action=(ActionEnum.GRAB, chocolatesyrup_index, 0))
+        vh_env.step(action=(ActionEnum.WALK_TO_OBJECT, 0, fridge_index))
+        tup = vh_env.step(action=(ActionEnum.OPEN, 0, fridge_index))
+        vh_env.step(action=(ActionEnum.STOP, 0, 0))
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
         self.assertTrue(float(tup[1]) < 0.)
 
     def test_t_env2_grab_food_one_by_one(self):
-        self.vh_env.reset(options={
-            'environment_index': 2,
-        })
+        self.comm.reset(2)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
         food_list = ['salmon','mincedmeat','juice']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
 
     def test_t_env3_grab_food_one_by_one(self):
-        self.vh_env.reset(options={
-            'environment_index': 3,
-        })
+        self.comm.reset(3)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
         food_list = ['pancake','pear','milkshake', 'chocolatesyrup']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
     def test_t_env4_grab_food_one_by_one(self):
-        self.vh_env.reset(options={
-            'environment_index': 4,
-        })
+        self.comm.reset(4)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
         food_list = ['pie','mincedmeat','chocolatesyrup']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
-    def test_t_env5_grab_food_(self):
-        self.vh_env.reset(options={
-            'environment_index': 5,
-        })
+    def test_t_env5_grab_food(self):
+        self.comm.reset(5)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
         food_list = ['salad','carrot']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
     def test_t_env6_grab_food_one_by_one(self):
-        self.vh_env.reset(options={
-            'environment_index': 6,
-        })
+        self.comm.reset(6)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+        vh_env = VirtualHomeGatherFoodEnv(environment_graph=g)
+        vh_env.reset()
 
         food_list = ['wine','juice','chocolatesyrup', 'chicken']
 
         for food in food_list:
-            self.util_put_food_in_fridge(food)
+            self.util_put_food_in_fridge(vh_env, food)
 
-        self.util_stop_epoch()
+        self.util_stop_epoch(vh_env)
 
-        print(f'instruct sequence: {self.vh_env.print_instruct()}')
+        print(f'instruct sequence: {vh_env.get_instruction_list()}')
 
         self.assertTrue(True)
 
