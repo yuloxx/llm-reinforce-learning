@@ -43,6 +43,17 @@ class FoodObjectStateEnum(IntEnum):
     INSIDE = 2
     FACING = 3
 
+class FoodStateV2Enum(IntEnum):
+    NONE = 0
+    INITIAL = 1
+    HOLD = 2
+    PLACED = 3
+
+class CharacterPlaceV2Enum(IntEnum):
+    NONE = 0
+    FOOD = 1
+    FRIDGE = 2
+
 
 if __name__ == '__main__':
     pass
