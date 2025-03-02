@@ -1,6 +1,6 @@
-from src.sb3vh.vh_env import VirtualHomeGatherFoodEnv
+from src.vh_env import VirtualHomeGatherFoodEnv
 from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
-from src.sb3vh.env_graph_enum import ActionEnum
+from src.vh_env.env_graph_enum import ActionEnum
 from stable_baselines3.common.env_checker import check_env
 import unittest
 

@@ -1,17 +1,62 @@
 import gymnasium as gym
 import numpy as np
-from fontTools.ttLib.tables.ttProgram import instructions
 from gymnasium.core import ActType, ObsType
 from typing import Any, SupportsFloat, Dict, List
 from bidict import bidict
 import logging
 
+from gymnasium.error import DeprecatedEnv
 from transitions.core import Machine, MachineError
 
 from .env_graph_enum import *
 
 
 class VirtualHomeGatherFoodEnvV2(gym.Env):
+    """
+    A custom Gymnasium environment for simulating a food gathering task in a VirtualHome setting.
+
+    This environment simulates a task where an agent interacts with a fridge and food objects in a virtual home.
+    The agent's goal is to open the fridge, grab food, and place it into the fridge within a set number of steps.
+    The environment provides a state machine where the agent's actions transition between different states based
+    on the environment's rules.
+
+    The environment includes the following states:
+        - 'fridge_closed_freehand_0', 'fridge_closed_freehand_1', 'fridge_closed_freehand_2': Different states
+          of the fridge being closed with varying levels of free hands.
+        - 'fridge_open_freehand_0', 'fridge_open_freehand_1', 'fridge_open_freehand_2': Different states
+          of the fridge being open, with varying levels of free hands.
+        - 'game_over': The state when the game ends.
+
+    Actions available to the agent include:
+        - Opening and closing the fridge.
+        - Grabbing and placing food.
+        - Ending the game.
+
+    The state machine is governed by the following transition rules:
+        - **_step_end_game**: Transitions from any state to the 'game_over' state.
+        - **_step_open_fridge**: Opens the fridge from a closed state with free hands.
+        - **_step_close_fridge**: Closes the fridge from an open state with free hands.
+        - **_step_grab_food**: Allows the agent to grab food from the fridge.
+        - **_step_place_food**: Allows the agent to place food back into the fridge.
+
+    The environment tracks the following:
+        - The state of the fridge (open/closed).
+        - The number of free hands the agent has.
+        - The state of food objects (whether they are grabbed or placed).
+        - The number of steps remaining in the game.
+
+    The `reset()` method initializes the environment and sets the agent's position and food count.
+    The `step()` method executes an action, updates the state, and returns the new observation, reward, and done flag.
+    The `render()` method (not implemented yet) would visualize the environment.
+    The `close()` method is used to clean up and release resources.
+
+    Example usage:
+        >>> env = VirtualHomeGatherFoodEnvV2(environment_graph=your_graph, log_level='info')
+        >>> observation, metadata = env.reset()
+        >>> action = 0  # for example, open fridge
+        >>> observation, reward, done, truncated, info = env.step(action)
+
+    """
 
     @classmethod
     def _set_game_metadata(cls):
@@ -26,10 +71,10 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
         cls.TASK_GUIDE_REWARD = 10
 
         # Bonus reward given per step, which can encourage the agent to complete the task in fewer steps
-        cls.BONUS_PER_STEP = 5
+        cls.BONUS_PER_STEP = 30
 
         # Punishment reward for invalid actions or actions that do not lead to progress
-        cls.PUNISHMENT_REWARD = -10
+        cls.PUNISHMENT_REWARD = -50
 
         # The maximum number of steps allowed in a single episode of the game
         cls.MAX_GAME_STEP = 64
@@ -146,27 +191,58 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             log_level: str = 'info',
     ) -> None:
         """
-        Initializes the VirtualHomeGatherFoodEnv environment.
+        Initializes the VirtualHomeGatherFoodEnvV2 environment.
 
-        This environment implements a food gathering task in VirtualHome with configurable
-        action and observation spaces. The observation space provides comprehensive information
-        about the environment state and relationships between entities.
+        This environment implements a food-gathering task in VirtualHome with configurable
+        action and observation spaces. The agent must collect food items and place them
+        into the fridge to complete the task.
 
         Args:
-            environment_graph (Dict[str, Any]): Initial environment state graph from Virtual Home
-                containing nodes (objects, characters) and edges (relationships). The graph should
-                include positions, states, and relationships between entities.
-            log_level (str): Logger severity level. Supported values: 'debug', 'info',
-                'warning', 'error' (case-insensitive). Defaults to "info".
+            environment_graph (Dict[str, Any]):
+                The initial environment state graph from VirtualHome. This graph consists
+                of nodes (objects, characters) and edges (relationships) that describe the
+                environment, including positions, states, and entity interactions.
+            log_level (str, optional):
+                The logging level for debugging and tracking environment behavior.
+                Supported values: 'debug', 'info', 'warning', 'error' (case-insensitive).
+                Defaults to "info".
+
+        Attributes:
+            environment_graph (Dict[str, Any]):
+                Stores the initial environment graph for reference.
+            self.observation (Dict[str, Any]):
+                Represents the agent's observation of the environment, including:
+                    - current_state (int): The current discrete state index.
+                    - food_holding (int): Number of food items the agent is holding.
+                    - food_state (np.ndarray): Array representing the state of all food items.
+                    - target_food_count (int): Number of target food items.
+                    - remaining_steps (int): Steps remaining in the episode.
+            self.observation_space (gym.spaces.Dict):
+                Defines the observation space for the agent, containing:
+                    - current_state: Discrete space for the state index.
+                    - food_holding: Discrete space (0, 1, or 2 food items).
+                    - food_state: Box space representing food item states.
+                    - target_food_count: Discrete space for the target food count.
+                    - remaining_steps: Discrete space for remaining steps.
+                    - fridge_state: Discrete space (0: closed, 1: open).
+            self.action_space (gym.spaces.Discrete):
+                Defines the available actions the agent can take.
+            self.vh_metadata (Dict[str, Any]):
+                Stores metadata about the environment, including:
+                    - character_id (int): The agent's ID in the virtual home.
+                    - food_id_bidict (bidict): Mapping between food names and IDs in the virtual home.
+                    - fridge_id (int): The fridge's ID in the virtual home.
+                    - instruction_list (List[str]): A list of executable instructions.
+                    - fridge_exist_flag (bool): Whether the fridge exists in the environment.
+                    - current_place (CharacterPlaceV2Enum): The agent's current location.
 
         Raises:
-
-        Explanation:
+            ValueError: If the `log_level` is not a valid logging level.
 
         Example:
             >>> from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
-            >>> PATH_TO_YOUR_VIRTUALHOME_EXECUTABLE = './xxx/virtualhome.exe'
-            >>> comm = UnityCommunication(file_name=PATH_TO_YOUR_VIRTUALHOME_EXECUTABLE)
+            >>> PATH_TO_VIRTUALHOME_EXECUTABLE = './path_to_virtualhome.exe'
+            >>> comm = UnityCommunication(file_name=PATH_TO_VIRTUALHOME_EXECUTABLE)
             >>> comm.reset(0)
             >>> comm.add_character('Chars/Male1')
             >>> res, g = comm.environment_graph()
@@ -181,11 +257,10 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
         self._add_logger(log_level)
         self.environment_graph = environment_graph
 
-
         self.observation = {
             'current_state': self.STATES.index(self.INITIAL_STATE),
             'food_holding': 0,
-            'food_state':  np.array([self.FOOD_COUNT], dtype=self.OBSERVATION_SPACE_DTYPE),
+            'food_state': np.array([self.FOOD_COUNT], dtype=self.OBSERVATION_SPACE_DTYPE),
             'target_food_count': 0,
             'remaining_steps': self.MAX_GAME_STEP,
         }
@@ -200,6 +275,7 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             ),
             'target_food_count': gym.spaces.Discrete(self.FOOD_COUNT),
             'remaining_steps': gym.spaces.Discrete(self.MAX_GAME_STEP + 1),
+            'fridge_state': gym.spaces.Discrete(2)
         })
         self.action_space = gym.spaces.Discrete(self.ACTION_COUNT)
 
@@ -208,13 +284,11 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             'food_id_bidict': bidict({}),  # Bidirectional mapping between food names and IDs
             'fridge_id': 0,
             'instruction_list': [],  # Instruction list to execute by virtual home
-            'fridge_exist_flag': False, # If the fridge exist
+            'fridge_exist_flag': False,  # If the fridge exist
             'current_place': CharacterPlaceV2Enum.NONE | 0,
         }
 
         Machine(model=self, states=self.STATES, transitions=self.TRANSITIONS_RULES, initial=self.INITIAL_STATE)
-
-
 
     def reset(
             self,
@@ -223,7 +297,28 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             options: Dict[str, Any] | None = None,
     ) -> tuple[ObsType, Dict[str, Any]]:
         """
-        Reset the environment to an initial state and return the initial observation.
+        Resets the environment to its initial state and returns the initial observation.
+
+        This method reinitializes the environment by resetting the metadata, observation
+        space, and extracting relevant entities (food items, fridge, character) from the
+        environment graph. The agent starts in the predefined initial state.
+
+        Args:
+            seed (int, optional):
+                A seed for random number generation to ensure reproducibility.
+                Defaults to None.
+            options (Dict[str, Any], optional):
+                Additional options for resetting the environment.
+                Defaults to None.
+
+        Returns:
+            tuple[ObsType, Dict[str, Any]]:
+                A tuple containing:
+                - **observation (ObsType)**: A dictionary representing the initial environment state.
+                - **vh_metadata (Dict[str, Any])**: A dictionary containing metadata about the environment.
+
+        Raises:
+            ValueError: If no fridge is found in the environment.
         """
 
         self.vh_metadata = {
@@ -231,16 +326,17 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             'food_id_bidict': bidict({}),  # Bidirectional mapping between food names and IDs
             'fridge_id': 0,
             'instruction_list': [],  # Instruction list to execute by virtual home
-            'fridge_exist_flag': False, # If the fridge exist
+            'fridge_exist_flag': False,  # If the fridge exist
             'current_place': CharacterPlaceV2Enum.NONE | 0,
         }
 
         self.observation = {
             'current_state': self.STATES.index(self.INITIAL_STATE),
             'food_holding': 0,
-            'food_state':  np.zeros((self.FOOD_COUNT,), dtype=self.OBSERVATION_SPACE_DTYPE),
+            'food_state': np.zeros((self.FOOD_COUNT,), dtype=self.OBSERVATION_SPACE_DTYPE),
             'target_food_count': 0,
             'remaining_steps': self.MAX_GAME_STEP,
+            'fridge_state': 0
         }
 
         for node in self.environment_graph['nodes']:
@@ -250,12 +346,12 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
                 self.vh_metadata['food_id_bidict'][node['class_name']] = node['id']
                 self.observation['target_food_count'] += 1
             if node['class_name'] == 'fridge':
-                self.observation['fridge_exist_flag'] = True
+                self.vh_metadata['fridge_exist_flag'] = True
                 self.vh_metadata['fridge_id'] = node['id']
             if node['class_name'] == 'character':
                 self.vh_metadata['character_id'] = node['id']
 
-        if not self.observation['fridge_exist_flag']:
+        if not self.vh_metadata['fridge_exist_flag']:
             raise ValueError('fridge does not exist')
 
         self.state = self.INITIAL_STATE
@@ -264,8 +360,33 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
     def step(
             self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
+        """
+        Executes a single step in the environment based on the given action.
 
-        if isinstance(action, int) and 0 <= action < self.ACTION_COUNT:
+        This method processes the agent's action, updates the environment state accordingly,
+        and calculates the reward. It also determines whether the episode has ended due to
+        task completion or exceeding the step limit.
+
+        Args:
+            action (ActType):
+                The action to be executed. It can be either:
+                - An integer index corresponding to an action in `ACTION_LIST`.
+                - A string representing the action name.
+
+        Returns:
+            tuple[ObsType, SupportsFloat, bool, bool, Dict[str, Any]]:
+                A tuple containing:
+                - **observation (ObsType)**: The updated environment state.
+                - **reward (SupportsFloat)**: The reward received for executing the action.
+                - **is_done (bool)**: Whether the episode has ended.
+                - **truncated (bool)**: Whether the episode was truncated (always `False` in this case).
+                - **vh_metadata (Dict[str, Any])**: Additional metadata about the environment.
+
+        Raises:
+            ValueError: If the provided action is invalid (not an integer within range or an unrecognized string).
+        """
+        # self.logger.debug(f'[action type] {type(action)}')
+        if isinstance(action, (int, np.integer)) and 0 <= action < self.ACTION_COUNT:
             pass
         elif isinstance(action, str):
             action = self.ACTION_LIST.index(action)
@@ -324,6 +445,12 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             is_done: bool,
             reward: int
     ):
+        """
+        Logs the current environment state after an action is taken.
+
+        This method records the action, updated environment state,
+        and relevant metadata for debugging purposes.
+        """
         self.logger.debug('--- environment info ---')
         self.logger.debug(f'action: {action}')
         self.logger.debug(f'is_done: {is_done}')
@@ -334,27 +461,46 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
         self.logger.debug('\n')
 
     def _step_end_game_wrapper(self):
+        """
+        Handles the logic for ending the game and calculating the final reward.
 
-        # 1. Try transitions
+        This method attempts to transition the environment to the "game_over" state.
+        If the transition fails (invalid action), a punishment reward is given.
+        Otherwise, it evaluates whether the food collection task is successfully completed
+        and calculates the final reward accordingly.
+
+        Returns:
+            int: The final reward based on task completion and efficiency.
+        """
+
+        # 1. Try transitioning to the 'game_over' state
         try:
-            self._step_end_game()
+            self._step_end_game()  # Attempt to trigger the state transition
         except MachineError:
-            return self.PUNISHMENT_REWARD
+            return self.PUNISHMENT_REWARD  # If transition fails, return a penalty
+
+        # Update the environment's current state to 'game_over'
         self.observation['current_state'] = self.STATES.index(self.FINISH_STATE)
 
-        # 2. Calculate Reward
+        # 2. Calculate the final reward
         reward = 0
         placed_food_count = 0
+
+        # Count the number of successfully placed food items
         for food_state in self.observation['food_state']:
             if food_state == FoodStateV2Enum.PLACED:
                 placed_food_count += 1
 
-        if placed_food_count >= self.observation['target_food_count']:
-            instruction_len = len(self.vh_metadata['instruction_list'])
-            reward = self.TASK_FINISH_REWARD + self.BONUS_PER_STEP * \
-                     (self.observation['remaining_steps'] - instruction_len)
+        # Check if all required food is placed and the fridge is closed
+        if placed_food_count >= self.observation['target_food_count'] and self.observation['fridge_state'] == 0:
+            instruction_len = len(self.vh_metadata['instruction_list'])  # Number of steps taken by the agent
+
+            # Compute reward: Base task completion reward + bonus for efficiency
+            reward = self.TASK_FINISH_REWARD + self.BONUS_PER_STEP * (
+                    self.observation['remaining_steps'] - instruction_len
+            )
         else:
-            reward = 0
+            reward = 0  # No reward if the task is incomplete
 
         return reward
 
@@ -402,100 +548,153 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
         return self.TARGET_REACHED_REWARD
 
     def _step_grab_food_wrapper(self) -> int:
+        """
+        Handles the logic for the agent grabbing food in the environment.
 
-        # 1. Automatically find the food to grab.
-        # Return punishment is there is no food in initial position
+        This method first checks if the agent can grab food (i.e., has free hands and there is available food).
+        If these conditions are met, it transitions the agent's state, generates the required instructions
+        for the VirtualHome simulator, updates the environment state, and provides a guidance reward.
+
+        Returns:
+            int: The guidance reward if the action is successful, or a punishment reward if the action is invalid.
+        """
+
+        # 1. Check if the agent has a free hand to grab food
         if self.observation['food_holding'] >= 2:
-            return self.PUNISHMENT_REWARD
+            return self.PUNISHMENT_REWARD  # Cannot grab more than 2 items, return a penalty
 
+        # 2. Automatically find the first available food in the initial state
         target_food_index = -1
         for i, food_state in enumerate(self.observation['food_state']):
-            if food_state == FoodStateV2Enum.INITIAL:
+            if food_state == FoodStateV2Enum.INITIAL:  # Find the first food item that is not yet grabbed
                 target_food_index = i
                 break
 
         if target_food_index == -1:
-            return self.PUNISHMENT_REWARD
+            return self.PUNISHMENT_REWARD  # No food available to grab, return a penalty
 
-        # 2. Try transitions
+        # 3. Attempt state transition to "grabbing food"
         try:
-            self._step_grab_food()
+            self._step_grab_food()  # Execute the state transition in the state machine
         except MachineError:
-            return self.PUNISHMENT_REWARD
+            return self.PUNISHMENT_REWARD  # If transition fails, return a penalty
 
-        # 3. Calculate instruction according to current place
+        # 4. Generate VirtualHome instructions for walking to the food and grabbing it
         instruct = []
-        food_class = self.FOOD_LIST[target_food_index]
-        food_vh_id = self.vh_metadata['food_id_bidict'][food_class]
-        instruct.append(f'<char0> [walk] <{food_class}> ({food_vh_id})')
-        instruct.append(f'<char0> [grab] <{food_class}> ({food_vh_id})')
-        self.vh_metadata['instruction_list'] += instruct
+        food_class = self.FOOD_LIST[target_food_index]  # Get food name (e.g., 'apple')
+        food_vh_id = self.vh_metadata['food_id_bidict'][food_class]  # Get corresponding VirtualHome ID
 
-        # 4. Execute walking to food, Update current place of agent
+        instruct.append(f'<char0> [walk] <{food_class}> ({food_vh_id})')  # Walk to the food
+        instruct.append(f'<char0> [grab] <{food_class}> ({food_vh_id})')  # Grab the food
+        self.vh_metadata['instruction_list'] += instruct  # Add instructions to execution list
+
+        # 5. Update agent's current place to indicate they are now near food
         self.vh_metadata['current_place'] = CharacterPlaceV2Enum.FOOD | 0
 
-        # 5. Update current state
-        self.observation['current_state'] = self.STATES.index(self.state)
-        self.observation['food_holding'] += 1
-        self.observation['food_state'][target_food_index] = FoodStateV2Enum.HOLD | 0
+        # 6. Update the environment state
+        self.observation['current_state'] = self.STATES.index(self.state)  # Sync state with FSM
+        self.observation['food_holding'] += 1  # Increase the count of food held by the agent
+        self.observation['food_state'][target_food_index] = FoodStateV2Enum.HOLD | 0  # Mark food as "held"
 
-        return self.TASK_GUIDE_REWARD
+        return self.TASK_GUIDE_REWARD  # Provide a small reward to encourage correct behavior
 
     def _step_close_fridge_wrapper(self) -> int:
+        """
+        Handles the logic for the agent closing the fridge in the environment.
 
-        # 1. Try transitions
+        This method checks the agent's current location and decides whether the agent needs to walk
+        to the fridge or if the agent is already in front of the fridge. It then generates the appropriate
+        instructions for the VirtualHome simulator, attempts to transition the agent's state to close the fridge,
+        and updates the environment state accordingly.
+
+        Returns:
+            int: The reward for successfully closing the fridge (0 if no reward or penalty).
+        """
+
+        # 1. Attempt to close the fridge and handle any state transition errors
         try:
-            self._step_close_fridge()
+            self._step_close_fridge()  # Execute the state transition to close the fridge
         except MachineError:
-            return self.PUNISHMENT_REWARD
+            return self.PUNISHMENT_REWARD  # Return a punishment if the state transition fails
 
-        # 2. Calculate instruction according to current place
+        # 2. Generate VirtualHome instructions based on the agent's current place
         instruct = []
         if self.vh_metadata['current_place'] == CharacterPlaceV2Enum.NONE \
                 or self.vh_metadata['current_place'] == CharacterPlaceV2Enum.FOOD:
-            instruct.append(f'<char0> [walk] <fridge> ({self.vh_metadata['fridge_id']})')
+            # If the agent is not in front of the fridge, generate walking instructions
+            instruct.append(f'<char0> [walk] <fridge> ({self.vh_metadata["fridge_id"]})')
         elif self.vh_metadata['current_place'] == CharacterPlaceV2Enum.FRIDGE:
+            # If the agent is already in front of the fridge, no need to walk
             pass
-        instruct.append(f'<char0> [close] <fridge> ({self.vh_metadata['fridge_id']})')
+        # Generate the instruction to close the fridge
+        instruct.append(f'<char0> [close] <fridge> ({self.vh_metadata["fridge_id"]})')
+
+        # Add generated instructions to the list of instructions
         self.vh_metadata['instruction_list'] += instruct
 
-        # 3. Execute walking to fridge, Update current place of agent
+        # 3. Update the agent's current location to reflect that they are now interacting with the fridge
         self.vh_metadata['current_place'] = CharacterPlaceV2Enum.FRIDGE | 0
 
-        # 4. Update current state
-        self.observation['current_state'] = self.STATES.index(self.state)
+        # 4. Update the environment's state to reflect that the fridge has been closed
+        self.observation['current_state'] = self.STATES.index(self.state)  # Sync state with FSM
+        self.observation['fridge_state'] = 0  # Mark the fridge as closed (state 0)
 
+        # No specific reward for closing the fridge, return 0
         return 0
 
     def _step_open_fridge_wrapper(self) -> int:
+        """
+        Handles the logic for the agent opening the fridge in the environment.
 
-        # 1. Try transition
+        This method checks the agent's current location, determines if the agent needs to walk
+        to the fridge or is already at the fridge, generates the appropriate instructions for the
+        VirtualHome simulator to open the fridge, and updates the environment state accordingly.
+
+        Returns:
+            int: The reward for successfully opening the fridge (0 if no reward or penalty).
+        """
+
+        # 1. Attempt to open the fridge and handle any state transition errors
         try:
-            self._step_open_fridge()
+            self._step_open_fridge()  # Execute the state transition to open the fridge
         except MachineError:
-            return self.PUNISHMENT_REWARD
+            return self.PUNISHMENT_REWARD  # Return a punishment if the state transition fails
 
-        # 2. Calculate instruction according to current place
+        # 2. Generate VirtualHome instructions based on the agent's current place
         instruct = []
         if self.vh_metadata['current_place'] == CharacterPlaceV2Enum.NONE \
                 or self.vh_metadata['current_place'] == CharacterPlaceV2Enum.FOOD:
-            instruct.append(f'<char0> [walk] <fridge> ({self.vh_metadata['fridge_id']})')
+            # If the agent is not in front of the fridge, generate walking instructions
+            instruct.append(f'<char0> [walk] <fridge> ({self.vh_metadata["fridge_id"]})')
         elif self.vh_metadata['current_place'] == CharacterPlaceV2Enum.FRIDGE:
+            # If the agent is already in front of the fridge, no need to walk
             pass
-        instruct.append(f'<char0> [open] <fridge> ({self.vh_metadata['fridge_id']})')
+        # Generate the instruction to open the fridge
+        instruct.append(f'<char0> [open] <fridge> ({self.vh_metadata["fridge_id"]})')
+
+        # Add generated instructions to the list of instructions
         self.vh_metadata['instruction_list'] += instruct
 
-        # 3. Execute Walk to fridge, Update current place of agent
+        # 3. Update the agent's current location to reflect that they are now interacting with the fridge
         self.vh_metadata['current_place'] = CharacterPlaceV2Enum.FRIDGE | 0
 
-        # 4. Update current state
-        self.observation['current_state'] = self.STATES.index(self.state)
+        # 4. Update the environment's state to reflect that the fridge has been opened
+        self.observation['current_state'] = self.STATES.index(self.state)  # Sync state with FSM
+        self.observation['fridge_state'] = 1  # Mark the fridge as open (state 1)
 
+        # No specific reward for opening the fridge, return 0
         return 0
 
-
-
     def _add_logger(self, log_level: str):
+        """
+        Initializes the logger for the class with the specified log level.
+
+        Args:
+            log_level (str): The desired log level. Supported values are 'debug', 'info', 'warning', 'error'.
+
+        Raises:
+            ValueError: If an invalid log level is provided.
+        """
         self.logger = logging.getLogger(self.__class__.__name__)
         log_level = log_level.lower()
         allowed_levels = {
@@ -510,7 +709,6 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
         if not self.logger.handlers:
             console_handler = logging.StreamHandler()
             self.logger.addHandler(console_handler)
-
 
 
 
@@ -535,7 +733,6 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
     # Data type used for the observation space, here it is set to 8 - bit unsigned integer
     OBSERVATION_SPACE_DTYPE = np.uint8
-
 
     FOOD_LIST = [
         'salmon',
@@ -659,7 +856,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         self._add_logger(log_level)
 
         self.none = None  # Placeholder for unused variables
-        self.environment_graph = environment_graph # reset initial environment_graph passed by virtual home communicator
+        self.environment_graph = environment_graph  # reset initial environment_graph passed by virtual home communicator
 
         # Define the action space for the character in Virtual Home:
         # - First dimension: Six action types (included in action_list).
@@ -752,7 +949,6 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         Raises:
             ValueError: If required objects (e.g., fridge) are missing in the environment configuration
         """
-
 
         self.vh_metadata = self._process_reset_metadata()
         self._process_environment_graph(self.environment_graph)
@@ -848,7 +1044,6 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         if not self.logger.handlers:
             console_handler = logging.StreamHandler()
             self.logger.addHandler(console_handler)
-
 
     def _step_wrapper(
             self, action: ActType
@@ -957,7 +1152,8 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         # Character is walking towards the food; begin by clearing object-character relations
         # Loop over all objects in the environment and reset the character's interaction state with each one
         for i in range(object_count):
-            self.observation['object_character_relation'][i] = ObjectCharacterStateEnum.NONE | 0  # Reset all object relations to NONE (no interaction)
+            self.observation['object_character_relation'][
+                i] = ObjectCharacterStateEnum.NONE | 0  # Reset all object relations to NONE (no interaction)
 
         # Clear all food-character relations, except for the food item that the character is holding
         # Loop through all food items in the environment
@@ -979,8 +1175,8 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
         reward = 0
         if self.observation['food_holding'] < 2 \
-            and self.observation['food_character_relation'][food_index] != FoodCharacterStateEnum.CLOSE_TO \
-            and self.observation['food_character_relation'][food_index] != FoodCharacterStateEnum.HOLD:
+                and self.observation['food_character_relation'][food_index] != FoodCharacterStateEnum.CLOSE_TO \
+                and self.observation['food_character_relation'][food_index] != FoodCharacterStateEnum.HOLD:
             reward = self.TASK_GUIDE_REWARD
 
         # Return the updated observation, with no reward for the walking action, and the updated metadata
@@ -1050,7 +1246,6 @@ class VirtualHomeGatherFoodEnv(gym.Env):
         instruction = self._process_step_instruction(action)
         self.vh_metadata['instruction_list'].append(instruction)
 
-
         reward = -1
         if self.observation['object_character_relation'][obj_index] != ObjectCharacterStateEnum.CLOSE_TO \
                 and self.OBJECT_LIST[obj_index] == 'fridge':
@@ -1061,8 +1256,8 @@ class VirtualHomeGatherFoodEnv(gym.Env):
             else:
                 object_index = self.get_object_index_dict()['fridge']
                 if self.observation['object_state'][object_index] & ObjectStateBitmapEnum.EXIST \
-                    and self.observation['object_state'][object_index] & ObjectStateBitmapEnum.CAN_OPEN \
-                    and self.observation['object_state'][object_index] & ObjectStateBitmapEnum.OPEN:
+                        and self.observation['object_state'][object_index] & ObjectStateBitmapEnum.CAN_OPEN \
+                        and self.observation['object_state'][object_index] & ObjectStateBitmapEnum.OPEN:
                     reward = self.TASK_GUIDE_REWARD
                 else:
                     reward = self.PUNISHMENT_REWARD
@@ -1379,7 +1574,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
         reward = 0
         if self.OBJECT_LIST[obj_index] == 'fridge' \
-            and self.observation['food_holding'] > 0:
+                and self.observation['food_holding'] > 0:
             reward += self.TASK_GUIDE_REWARD
 
         # Return the updated observation, no reward for this action (0), and the metadata.
@@ -1449,7 +1644,7 @@ class VirtualHomeGatherFoodEnv(gym.Env):
 
         reward = 0
         if self.OBJECT_LIST[obj_index] == 'fridge' \
-            and self.observation['food_holding'] == 0:
+                and self.observation['food_holding'] == 0:
             reward += self.TASK_GUIDE_REWARD
 
         # Return the updated observation, no reward for this action (0), and the metadata.

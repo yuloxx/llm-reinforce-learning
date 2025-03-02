@@ -1,4 +1,4 @@
-from src.sb3vh.vh_env import VirtualHomeGatherFoodEnvV2
+from src.vh_env import VirtualHomeGatherFoodEnvV2
 from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
 import unittest
 
@@ -177,3 +177,28 @@ class VhGatherEnvTest(unittest.TestCase):
         print(f'instruction list: {vh_env.get_instruction_list()}')
         print(f'final state: {tup}')
         self.assertTrue(float(tup[1]) < 0.)
+
+    def test_f_close_fridge_twice(self):
+        self.comm.reset(0)
+        self.comm.add_character()
+        res, g = self.comm.environment_graph()
+
+        vh_env = VirtualHomeGatherFoodEnvV2(environment_graph=g, log_level='debug')
+        vh_env.reset()
+
+        # vh_env.step('open_fridge')
+        vh_env.step(0)
+        vh_env.step('grab_food')
+        vh_env.step('grab_food')
+        vh_env.step('place_food')
+        vh_env.step('close_fridge')
+        tup = vh_env.step('close_fridge')
+
+        vh_env.step('end_game')
+
+        print(f'instruction list: {vh_env.get_instruction_list()}')
+        print(f'final state: {tup}')
+        self.assertTrue(float(tup[1]) < 0.)
+
+if __name__ == '__main__':
+    unittest.main()
