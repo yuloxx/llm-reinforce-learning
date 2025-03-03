@@ -26,6 +26,28 @@ class ModelTrainerTest(unittest.TestCase):
 
         model_trainer.train(
             vec_envs=4,
-            total_timesteps=10000,
+            total_timesteps=12000,
             hyperparameters_list=[{}],
         )
+
+    def test_model_trainer_show_mean_reward(self):
+        self.comm.reset(0)
+        self.comm.add_character()
+
+        model_trainer = ModelTrainer(
+            algo=ModelTrainerRLAlgo.PPO,
+            create_env= lambda: VirtualHomeGatherFoodEnvV2(environment_graph=g)
+        )
+
+        model_trainer.show_mean_reward_chart('bbb')
+
+    def test_model_trainer_show_episode_length(self):
+        self.comm.reset(0)
+        self.comm.add_character()
+        model_trainer = ModelTrainer(
+            algo=ModelTrainerRLAlgo.PPO,
+            create_env= lambda: VirtualHomeGatherFoodEnvV2(environment_graph=g)
+        )
+
+        model_trainer.show_ep_length_chart('aaa')
+
