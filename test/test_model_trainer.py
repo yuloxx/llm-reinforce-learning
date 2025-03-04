@@ -51,3 +51,12 @@ class ModelTrainerTest(unittest.TestCase):
 
         model_trainer.show_ep_length_chart('aaa')
 
+    def test_model_trainer_show_success_rate(self):
+        self.comm.reset(0)
+        self.comm.add_character()
+        model_trainer = ModelTrainer(
+            algo=ModelTrainerRLAlgo.PPO,
+            create_env= lambda: VirtualHomeGatherFoodEnvV2(environment_graph=g)
+        )
+
+        model_trainer.show_success_rate_chart('aaa')
