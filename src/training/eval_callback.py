@@ -74,6 +74,9 @@ class ModelTrainerCallBack(EvalCallback):
             "mean_reward": None,
             "ep_length": None,
             "success_rate": None,
+            "train/learning_rate": [],
+            "train/entropy_loss": [],
+            "train/value_loss": [],
         }
 
     def get_model_eval(self) -> Dict[str, Any]:
@@ -122,6 +125,16 @@ class ModelTrainerCallBack(EvalCallback):
 
         The callback records the starting state and sets up the environment.
         """
+        self.postfix = {
+            "mean_reward": None,
+            "ep_length": None,
+            "success_rate": None,
+            "train/learning_rate": [],
+            "train/entropy_loss": [],
+            "train/value_loss": [],
+            "train/mean_reward": [],
+            "train/ep_length": [],
+        }
         super()._on_training_start()
         target_steps = self.locals["total_timesteps"] - self.model.num_timesteps
         actual_steps = self._calc_actual_steps(target_steps=target_steps)
@@ -221,6 +234,22 @@ class ModelTrainerCallBack(EvalCallback):
 
             # Dump log so the evaluation results are printed with the correct timestep
             self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
+
+            # print(self.logger.name_to_value)
+            value_loss = self.logger.name_to_value["train/value_loss"]
+            entropy_loss = self.logger.name_to_value["train/entropy_loss"]
+            learning_rate = self.logger.name_to_value["train/learning_rate"]
+
+            self.postfix["train/learning_rate"].append(learning_rate)
+            self.postfix["train/entropy_loss"].append(entropy_loss)
+            self.postfix["train/value_loss"].append(value_loss)
+
+            self.postfix["train/mean_reward"].append(mean_reward)
+            self.postfix["train/ep_length"].append(mean_ep_length)
+
+            # PPO: dict_keys(['train/learning_rate', 'train/entropy_loss', 'train/policy_gradient_loss', 'train/value_loss', 'train/approx_kl', 'train/clip_fraction', 'train/loss', 'train/explained_variance', 'train/n_updates', 'train/clip_range', 'eval/mean_reward', 'eval/mean_ep_length', 'time/total_timesteps'])
+            # A2C: dict_keys(['train/learning_rate', 'train/n_updates', 'train/explained_variance', 'train/entropy_loss', 'train/policy_loss', 'train/value_loss', 'eval/mean_reward', 'eval/mean_ep_length', 'time/total_timesteps'])
+
             self.logger.dump(self.num_timesteps)
 
             # Save the best model if the mean reward improves
@@ -239,15 +268,18 @@ class ModelTrainerCallBack(EvalCallback):
                 continue_training = continue_training and self._on_event()
 
             # Update the postfix with evaluation metrics for progress bar
-            self.postfix = {
+            update_kv = {}
+            for key, value in {
                 "mean_reward": mean_reward,
                 "ep_length": mean_ep_length,
-                "success_rate": success_rate
-            }
-            # Remove any None values from the postfix
-            self.postfix = {k: v for k, v in self.postfix.items() if v is not None}
+                "learning_rate": learning_rate,
+                "value_loss": value_loss,
+                "entropy_loss": entropy_loss,
+            }.items():
+                self.postfix[key] = value
+                update_kv[key] = value
 
-            if self.postfix:
-                self.progress_bar.set_postfix(self.postfix)
+            if update_kv:
+                self.progress_bar.set_postfix(update_kv)
 
         return continue_training

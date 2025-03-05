@@ -149,6 +149,7 @@ class ModelTrainer:
                 n_vec_env=vec_envs,
                 verbose=0,
                 best_model_save_path=model_save_path,
+                eval_freq=4096,
             )
             model = learner.learn(total_timesteps=total_timesteps, callback=callback)
             eval_dict = callback.get_model_eval()
@@ -159,7 +160,7 @@ class ModelTrainer:
         return self.result_list
 
 
-    def show_mean_reward_chart(
+    def compare_show_final_mean_reward(
             self,
             target_hyperparameter: str
     ):
@@ -186,14 +187,7 @@ class ModelTrainer:
             This will generate a chart showing how the mean reward changes with different learning rates.
         """
 
-        if len(self.result_list) == 0:
-            raise ValueError(f'No result fount in result list, train a model first')
-
-        # Check hyperparameter values for sorting
-        for result in self.result_list:
-            if target_hyperparameter not in result['hyperparameters']:
-                raise ValueError(f"Error: The hyperparameter '{target_hyperparameter}' not found.")
-
+        self._show_result_list_check(target_hyperparameter)
         # Sort the result_list based on the target hyperparameter
         self.result_list.sort(key=lambda entry: entry['hyperparameters'][target_hyperparameter])
 
@@ -215,7 +209,7 @@ class ModelTrainer:
         plt.grid(True)
         plt.show()
 
-    def show_ep_length_chart(
+    def compare_show_final_ep_length(
             self,
             target_hyperparameter: str
     ):
@@ -241,15 +235,7 @@ class ModelTrainer:
 
             This will generate a chart showing how the episode length changes with different learning rates.
         """
-
-        if len(self.result_list) == 0:
-            raise ValueError(f'No result fount in result list, train a model first')
-
-        # Check hyperparameter values for sorting
-        for result in self.result_list:
-            if target_hyperparameter not in result['hyperparameters']:
-                raise ValueError(f"Error: The hyperparameter '{target_hyperparameter}' not found.")
-
+        self._show_result_list_check(target_hyperparameter)
         # Sort the result_list based on the target hyperparameter
         self.result_list.sort(key=lambda entry: entry['hyperparameters'][target_hyperparameter])
 
@@ -270,7 +256,7 @@ class ModelTrainer:
         plt.grid(True)
         plt.show()
 
-    def show_success_rate_chart(
+    def compare_show_final_success_rate(
             self,
             target_hyperparameter: str
     ):
@@ -296,14 +282,7 @@ class ModelTrainer:
 
             This will generate a chart showing how the success rate changes with different batch sizes.
         """
-        if len(self.result_list) == 0:
-            raise ValueError(f'No result fount in result list, train a model first')
-
-        # Check hyperparameter values for sorting
-        for result in self.result_list:
-            if target_hyperparameter not in result['hyperparameters']:
-                raise ValueError(f"Error: The hyperparameter '{target_hyperparameter}' not found.")
-
+        self._show_result_list_check(target_hyperparameter)
         # Sort the result_list based on the target hyperparameter
         self.result_list.sort(key=lambda entry: entry['hyperparameters'][target_hyperparameter])
 
@@ -324,6 +303,138 @@ class ModelTrainer:
         plt.grid(True)
         plt.show()
 
+
+    def show_learning_rate(
+            self,
+            target_hyperparameter: str
+    ):
+        """Displays the learning rate schedule for different values of a specified hyperparameter.
+
+        This method plots the learning rate over training steps for different configurations
+        of the specified hyperparameter.
+
+        Args:
+            target_hyperparameter (str): The hyperparameter to analyze. The results will be grouped
+                by this hyperparameter before plotting.
+
+        Raises:
+            ValueError: If `self.result_list` is empty.
+            ValueError: If `target_hyperparameter` is not found in the training results.
+        """
+        self._show_result_list_check(target_hyperparameter)
+        learning_rates = [entry['train/learning_rate'] for entry in self.result_list]
+        hyperparameter_names = [entry['hyperparameters'][target_hyperparameter] for entry in self.result_list]
+
+        plt.figure(figsize=(8, 6))
+        for lr, name in zip(learning_rates, hyperparameter_names):
+            plt.plot(lr, marker='o', label=f'Hyperparameter: {name}')
+
+        plt.xlabel('Step')
+        plt.ylabel('Learning Rate')
+        plt.title('Learning Rate Schedule for Different Hyperparameters')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def show_entropy_loss(self, target_hyperparameter: str):
+        """Displays the entropy loss over training steps for different values of a specified hyperparameter.
+
+        Args:
+            target_hyperparameter (str): The hyperparameter to analyze.
+
+        Raises:
+            ValueError: If `self.result_list` is empty.
+            ValueError: If `target_hyperparameter` is not found in the training results.
+        """
+        self._show_result_list_check(target_hyperparameter)
+        entropy_losses = [entry['train/entropy_loss'] for entry in self.result_list]
+        hyperparameter_names = [entry['hyperparameters'][target_hyperparameter] for entry in self.result_list]
+
+        plt.figure(figsize=(8, 6))
+        for loss, name in zip(entropy_losses, hyperparameter_names):
+            plt.plot(loss, marker='o', label=f'Hyperparameter: {name}')
+
+        plt.xlabel('Step')
+        plt.ylabel('Entropy Loss')
+        plt.title('Entropy Loss for Different Hyperparameters')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def show_value_loss(self, target_hyperparameter: str):
+        """Displays the value loss over training steps for different values of a specified hyperparameter.
+
+        Args:
+            target_hyperparameter (str): The hyperparameter to analyze.
+
+        Raises:
+            ValueError: If `self.result_list` is empty.
+            ValueError: If `target_hyperparameter` is not found in the training results.
+        """
+        self._show_result_list_check(target_hyperparameter)
+        value_losses = [entry['train/value_loss'] for entry in self.result_list]
+        hyperparameter_names = [entry['hyperparameters'][target_hyperparameter] for entry in self.result_list]
+
+        plt.figure(figsize=(8, 6))
+        for loss, name in zip(value_losses, hyperparameter_names):
+            plt.plot(loss, marker='o', label=f'Hyperparameter: {name}')
+
+        plt.xlabel('Step')
+        plt.ylabel('Value Loss')
+        plt.title('Value Loss for Different Hyperparameters')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def show_mean_reward(self, target_hyperparameter: str):
+        """Displays the mean reward over training steps for different values of a specified hyperparameter.
+
+        Args:
+            target_hyperparameter (str): The hyperparameter to analyze.
+
+        Raises:
+            ValueError: If `self.result_list` is empty.
+            ValueError: If `target_hyperparameter` is not found in the training results.
+        """
+        self._show_result_list_check(target_hyperparameter)
+        mean_rewards = [entry['train/mean_reward'] for entry in self.result_list]
+        hyperparameter_names = [entry['hyperparameters'][target_hyperparameter] for entry in self.result_list]
+
+        plt.figure(figsize=(8, 6))
+        for reward, name in zip(mean_rewards, hyperparameter_names):
+            plt.plot(reward, marker='o', label=f'Hyperparameter: {name}')
+
+        plt.xlabel('Step')
+        plt.ylabel('Mean Reward')
+        plt.title('Mean Reward for Different Hyperparameters')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def show_ep_length(self, target_hyperparameter: str):
+        """Displays the episode length over training steps for different values of a specified hyperparameter.
+
+        Args:
+            target_hyperparameter (str): The hyperparameter to analyze.
+
+        Raises:
+            ValueError: If `self.result_list` is empty.
+            ValueError: If `target_hyperparameter` is not found in the training results.
+        """
+        self._show_result_list_check(target_hyperparameter)
+        ep_lengths = [entry['train/ep_length'] for entry in self.result_list]
+        hyperparameter_names = [entry['hyperparameters'][target_hyperparameter] for entry in self.result_list]
+
+        plt.figure(figsize=(8, 6))
+        for length, name in zip(ep_lengths, hyperparameter_names):
+            plt.plot(length, marker='o', label=f'Hyperparameter: {name}')
+
+        plt.xlabel('Step')
+        plt.ylabel('Episode Length')
+        plt.title('Episode Length for Different Hyperparameters')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
     def save_model(
             self,
@@ -356,6 +467,18 @@ class ModelTrainer:
 
         model = self.result_list[model_index]['model']
         model.save(model_save_path)
+
+    def _show_result_list_check(
+            self,
+            target_hyperparameter: str
+    ):
+        if len(self.result_list) == 0:
+            raise ValueError('No result found in result list, train a model first')
+
+        for result in self.result_list:
+            if target_hyperparameter not in result['hyperparameters']:
+                raise ValueError(f"Error: The hyperparameter '{target_hyperparameter}' not found.")
+
 
 
     def _create_sb3_learner(

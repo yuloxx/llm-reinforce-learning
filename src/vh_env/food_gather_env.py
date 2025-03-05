@@ -5,7 +5,6 @@ from typing import Any, SupportsFloat, Dict, List
 from bidict import bidict
 import logging
 
-from gymnasium.error import DeprecatedEnv
 from transitions.core import Machine, MachineError
 
 from .env_graph_enum import *
