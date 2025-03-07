@@ -27,7 +27,7 @@ def test_env(create_env: Callable[[], gym.Env]):
 
 
 def train_ppo_model():
-    from src.vh_env.food_gather_env import VirtualHomeGatherFoodEnvV2
+    from src.vh_env.food_gather import VirtualHomeGatherFoodEnvV2
     from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
 
     YOUR_FILE_NAME = "D:\\programs\\windows_exec.v2.2.4\\VirtualHome.exe"
@@ -47,7 +47,7 @@ def train_ppo_model():
     model.save("../../model/v2_first_test.zip")
 
 def test_ppo_model():
-    from src.vh_env.food_gather_env import VirtualHomeGatherFoodEnvV2
+    from src.vh_env.food_gather import VirtualHomeGatherFoodEnvV2
     from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
     YOUR_FILE_NAME = "D:\\programs\\windows_exec.v2.2.4\\VirtualHome.exe"
     comm = UnityCommunication(file_name=YOUR_FILE_NAME)
@@ -73,7 +73,7 @@ def test_ppo_model():
     print(vh_env.get_instruction_list())
 
 def main2():
-    from src.vh_env.food_gather_env import VirtualHomeGatherFoodEnv
+    from src.vh_env.food_gather import VirtualHomeGatherFoodEnv
     from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
 
     YOUR_FILE_NAME = "D:\\programs\\windows_exec.v2.2.4\\VirtualHome.exe"

@@ -7,7 +7,7 @@ import logging
 
 from transitions.core import Machine, MachineError
 
-from .env_graph_enum import *
+from .enums import *
 
 
 class VirtualHomeGatherFoodEnvV2(gym.Env):
