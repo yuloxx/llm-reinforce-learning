@@ -234,6 +234,8 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
                     - instruction_list (List[str]): A list of executable instructions.
                     - fridge_exist_flag (bool): Whether the fridge exists in the environment.
                     - current_place (CharacterPlaceV2Enum): The agent's current location.
+            self.state (str):
+                The current state of the environment.
 
         Raises:
             ValueError: If the `log_level` is not a valid logging level.
@@ -286,6 +288,9 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             'fridge_exist_flag': False,  # If the fridge exist
             'current_place': CharacterPlaceV2Enum.NONE | 0,
         }
+
+        self.is_success = False
+        self.state = self.INITIAL_STATE
 
         Machine(model=self, states=self.STATES, transitions=self.TRANSITIONS_RULES, initial=self.INITIAL_STATE)
 
@@ -389,6 +394,8 @@ class VirtualHomeGatherFoodEnvV2(gym.Env):
             pass
         elif isinstance(action, str):
             action = self.ACTION_LIST.index(action)
+        elif isinstance(action, np.ndarray) and action.size == 1:
+            action = int(action.item())
         else:
             raise ValueError('invalid action')
 

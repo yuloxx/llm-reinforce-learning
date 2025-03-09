@@ -57,4 +57,7 @@ class CrossVirtualHomeGatherFoodEnvV2(gym.Env):
             env.close()
         self.selected_env_index = -1
 
-
+    def get_instruction_list(self) -> List[str]:
+        if not 0 <= self.selected_env_index < self.env_count:
+            raise ValueError("Error: unexpected environment index, make sure that the environment is correctly reset")
+        return self.basic_env_list[self.selected_env_index].get_instruction_list()
