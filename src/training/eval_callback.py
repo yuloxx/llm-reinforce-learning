@@ -1,4 +1,5 @@
 import os
+from itertools import accumulate
 from typing import Dict, Any
 
 import numpy as np
@@ -147,6 +148,11 @@ class ModelTrainerCallBack(EvalCallback):
         """
         super()._on_training_end()
         self.progress_bar.close()
+        self.postfix["train/mean_reward"] = [
+            float(sum_reward) / (i + 1)
+            for i, sum_reward in enumerate(accumulate(self.postfix["train/mean_reward"]))
+        ]
+
 
     def _on_step(self) -> bool:
         """

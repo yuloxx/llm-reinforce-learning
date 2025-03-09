@@ -5,6 +5,7 @@ from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.vec_env import VecEnv
 
 from typing import Callable, Dict, List, Any
+from itertools import accumulate
 from pathlib import Path
 from enum import Enum, auto
 import matplotlib.pyplot as plt
@@ -155,6 +156,7 @@ class ModelTrainer:
             eval_dict = callback.get_model_eval()
             eval_dict['model'] = model
             eval_dict['hyperparameters'] = hyperparameters
+
             self.result_list.append(eval_dict)
 
         return self.result_list
