@@ -1,4 +1,4 @@
-from .food_gather import VirtualHomeGatherFoodEnvV2
+from .food_gather_env import VirtualHomeGatherFoodEnvV2
 from typing import List, Dict, Any
 import gymnasium as gym
 from gymnasium.core import ObsType, ActType, SupportsFloat
