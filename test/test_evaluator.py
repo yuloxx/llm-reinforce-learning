@@ -47,6 +47,30 @@ class EvaluatorTest(unittest.TestCase):
         train_cross_food_gather_agent_v2()
 
 
+    def test_model(self):
+        from src.vh_env.food_gather_env import VirtualHomeGatherFoodEnvV2
+        from virtualhome.simulation.unity_simulator.comm_unity import UnityCommunication
+        YOUR_FILE_NAME = "D:\\programs\\windows_exec.v2.2.4\\VirtualHome.exe"
+        comm = UnityCommunication(file_name=YOUR_FILE_NAME)
+        comm.reset(0)
+        comm.add_character()
+        res, g = comm.environment_graph()
+        comm.close()
+        # print(g)
 
+        model = PPO.load("../model/v2_first_test.zip")
+        vh_env = VirtualHomeGatherFoodEnvV2(
+            environment_graph=g,
+            log_level='warning'
+        )
+
+        obs, metadata = vh_env.reset()
+        done = False
+        while not done:
+            action, _ = model.predict(obs, deterministic=True)
+            action = int(action)
+            print(f'type{type(action)}, action:{vh_env.ACTION_LIST[action]}')
+            obs, reward, done, _, metadata = vh_env.step(action)
+        print(vh_env.get_instruction_list())
 
 

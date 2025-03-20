@@ -154,6 +154,61 @@ class TestVirtualHome(unittest.TestCase):
 
         comm.close()
 
+    def test_microwave(self):
+        from src.vh_util.env_graph import query_node_id_by_classname
+        comm = comm_unity.UnityCommunication(file_name=self.YOUR_FILE_NAME)
+        for i in range(7):
+            comm.reset(i)
+            res, g = comm.environment_graph()
+            res = query_node_id_by_classname('dishwasher', g)
+            print(f'{i}: {res}')
+
+        # stove:
+        # 0: 312
+        # 1: 150
+        # 2: 164
+        # 3: 105
+        # 4: 152
+        # 5: 242
+        #
+        # 6: 157
+
+        # microwave
+        # 0: 314
+        # 1: 158
+        # 2: 172
+        # 3: 109
+        # 4: 160
+        # 5: 251
+        #
+        # 6: 167
+
+        # desk
+        # 0: 110
+        # 1: 215
+        # 2: 281
+        # 3: 213
+        # 4: 27
+        # 5: 295
+        #
+        # 6: 244
+
+        # plate
+        # 0: 62
+        # 1: 94
+        # 2: 67
+        # 3: 110
+        # 4: 96
+        # 5: 55
+        #
+        #
+        # 6: 99
+
+        # dishwasher
+
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
